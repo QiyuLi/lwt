@@ -7,6 +7,7 @@ __lwt_trampoline:
 	// will cause a fault...you should never get here!
 	movl $0, %eax
 	movl (%eax), %ebx
+
 .align 16
 .globl __lwt_trampoline_test
 __lwt_trampoline_test:
