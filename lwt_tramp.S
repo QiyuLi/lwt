@@ -11,5 +11,6 @@ __lwt_trampoline:
 .align 16
 .globl __lwt_trampoline_test
 __lwt_trampoline_test:
+	pop %eax
 	call __lwt_start_test
 	ret

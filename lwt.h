@@ -40,5 +40,5 @@ void __lwt_dispatch(lwt_t next, lwt_t current);
 extern void __lwt_trampoline();
 extern void __lwt_trampoline_test();
 void __lwt_start();
-void __lwt_start_test();
+void __lwt_start_test(void *data);
 

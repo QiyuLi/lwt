@@ -63,10 +63,11 @@ void __lwt_dispatch(lwt_t next, lwt_t current)
 
 void __lwt_start()
 {
-	printf("lwt start!\n");
+        return;
 }
 
-void __lwt_start_test()
+void __lwt_start_test(void *data)
 {
-	__lwt_start();
+	int a = (int) data;
+	printf("lwt start! %d\n", a);
 }
