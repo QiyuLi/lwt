@@ -33,4 +33,7 @@ extern void __lwt_trampoline_test();
 void __lwt_start();
 void __lwt_start_test();
 
+/* Global Variables */
+lwt_tcb *run_queue[];
+lwt_t *current;
 

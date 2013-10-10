@@ -4,6 +4,9 @@ CC=gcc
 CFLAGS=-g -I. -Wall -Wextra
 #DEFINES=
 
+all:	$(BIN)
+	@echo "======  Makefile Finished  ======"
+
 $(BIN):	$(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) -o $(BIN) $^
 
