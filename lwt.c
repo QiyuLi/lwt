@@ -4,6 +4,19 @@
 
 #include <lwt.h>
 
+/* Global Variables */
+lwt_tcb *tcb[MAX_THREAD_SIZE];
+lwt_t current=0;
+
+int prestart = 0;
+static void __lwt_prestart()
+{
+	for(prestart = 0; prestart < MAX_THREAD_SIZE; prestart++)
+	{
+		tcb[prestart] = NULL;
+	}
+	return;
+}
 /* lwt functions */
 lwt_t lwt_create(lwt_fn_t fn, void *data)
 {
