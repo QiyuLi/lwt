@@ -17,7 +17,9 @@ static void __lwt_prestart()
 	}
 	return;
 }
+
 /* lwt functions */
+int counter = 1;
 lwt_t lwt_create(lwt_fn_t fn, void *data)
 {
 	return NULL;
