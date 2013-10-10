@@ -1,3 +1,6 @@
+#ifndef LWT_H
+#define LWT_H
+
 #define MAX_THREAD_SIZE 1024 
 #define DEFAULT_STACK_SIZE 16384 // 16KB
 
@@ -20,6 +23,8 @@ typedef struct lwt_tcb_struct {
 
 
 typedef void *(*lwt_fn_t)(void *);
+
+#endif
 
 /* lwt functions */
 lwt_t lwt_create(lwt_fn_t fn, void *data);
