@@ -8,11 +8,22 @@
 //extern int * __lwt_trampoline();
 //extern int * __lwt_trampoline_test();
 
+void *t123(void *d) __attribute__ ((noinline));
+
+void *t123(void *d)
+{
+	printf("T123 In t 123\n");
+}
+
 int main()
 {
-	void *x= (void *) 7;
+//	printf("main before t123\n");
+	lwt_fn_t x = t123;
+//	printf("%d\n", (int) t123);
+//	printf("main afer t123\n");
+//	void *x= (void *) t123;
+//	printf("%d\n", (int) t123);
 	__asm__ __volatile__ ("sub $0x4,%esp");
-//	__asm__ __volatile__ ("movl $0x7,(%esp)");
 	__asm__ __volatile__ ("movl %0, (%%esp)"
 				: 
 				: "r"(x)	);

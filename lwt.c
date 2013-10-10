@@ -68,6 +68,8 @@ void __lwt_start()
 
 void __lwt_start_test(void *data)
 {
-	int a = (int) data;
-	printf("lwt start! %d\n", a);
+	printf("lwt start!\n");
+	lwt_fn_t fn = (lwt_fn_t) data;
+	printf("%d\n", (int) fn); 	
+	fn(NULL);
 }
