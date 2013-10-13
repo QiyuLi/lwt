@@ -1,7 +1,7 @@
 BIN=main
 OBJS=main.o lwt_tramp.o lwt.o
 CC=gcc
-CFLAGS=-ggdb3 -I. -Wall -Wextra -Wno-unused-parameter -Wno-unused-function
+CFLAGS=-I. -Wall -Wextra -Wno-unused-parameter -Wno-unused-function
 #DEFINES=
 
 all:	$(BIN)

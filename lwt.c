@@ -35,11 +35,6 @@ __queue_remove(lwt_tcb *thd)
 {
 	//printf("run queue remove: %d \n", thd->tid);
 
-
-rdtscll(start);
-
-
-
 	if(!thd)
 		return -1;
 
@@ -50,22 +45,14 @@ rdtscll(start);
 	else
 		queue_tail = NULL;
 
-rdtscll(end);
-
-printf("Overhead  of queue remove is %lld\n", (end-start));
-
 	return 0;
-
-
-
 }
 
 int 
 __queue_add(lwt_tcb *thd)
 {
 	//printf("run queue add: %d \n", thd->tid);
-unsigned long long start, end;
-rdtscll(start);
+
 	if(!thd)
 		return -1;
 	
@@ -80,9 +67,6 @@ rdtscll(start);
 
 	queue_tail = thd;
 
-rdtscll(end);
-
-printf("Overhead  of queue add is %lld\n", (end-start));
 	return 0;
 }
 
@@ -118,10 +102,8 @@ lwt_create(lwt_fn_t fn, void *data)
 	//add main tread
 	if(!temp){
 
-unsigned long long start1, end1;
-rdtscll(start1);
 		queue_head = malloc(sizeof(lwt_tcb));
-rdtscll(end1);
+
 		tcb[temp] = malloc(sizeof(lwt_tcb));
 
 		tcb[temp]->tid    = temp;
@@ -132,19 +114,14 @@ rdtscll(end1);
 		temp++;
 		counter++;
 
-printf("in main is %lld\n", (end1-start1));
 	}
 
 
+rdtscll(start);
 
 	tcb[temp] = malloc(sizeof(lwt_tcb));
 
-
-
 	tcb[temp]->stack  = malloc(DEFAULT_STACK_SIZE);
-
-
-
 
 	tcb[temp]->tid    = temp;
 	tcb[temp]->status = READY;
@@ -155,8 +132,8 @@ printf("in main is %lld\n", (end1-start1));
 	tcb[temp]->next   = NULL;
 	tcb[temp]->prev   = NULL;
 
-unsigned long long start, end;
-rdtscll(start);
+
+
 
 	__queue_add(tcb[temp]);
 
@@ -165,7 +142,7 @@ rdtscll(end);
 
 
 
-printf("Overhead  of lwt_create is %lld\n", (end-start));
+//printf("Overhead  of lwt_create is %lld\n", (end-start));
 
 	//fn(data);
 
@@ -231,7 +208,7 @@ rdtscll(start);
 
 rdtscll(end);
 
-printf("Overhead  of join is %lld\n", (end-start));
+//printf("Overhead  of join is %lld\n", (end-start));
         return retVal;
 }
 
