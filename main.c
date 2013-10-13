@@ -6,7 +6,7 @@
 
 #define rdtscll(val) __asm__ __volatile__("rdtsc" : "=A" (val))
 
-#define ITER 10000
+#define ITER 1
 
 /* 
  * My performance on an Intel Core i5-2520M CPU @ 2.50GHz:
@@ -23,7 +23,9 @@ fn_bounce(void *d)
 	int i;
 	unsigned long long start, end;
 
-	thd_cnt++;
+	thd_cnt++;	
+	//printf("fn_bounce \n");
+
 	lwt_yield(LWT_NULL);
 	lwt_yield(LWT_NULL);
 	rdtscll(start);
@@ -33,6 +35,7 @@ fn_bounce(void *d)
 	lwt_yield(LWT_NULL);
 
 	if (!d) printf("Overhead of yield is %lld\n", (end-start)/ITER);
+
 
 	return NULL;
 }
@@ -54,7 +57,7 @@ fn_nested_joins(void *d)
 	if (d) {
 		lwt_yield(LWT_NULL);
 		lwt_yield(LWT_NULL);
-		assert(lwt_info(LWT_INFO_NTHD_RUNNABLE) == 1);
+		//assert(lwt_info(LWT_INFO_NTHD_RUNNABLE) == 1);
 		lwt_die(NULL);
 	}
 	chld = lwt_create(fn_nested_joins, (void*)1);
@@ -89,7 +92,9 @@ fn_join(void *d)
 
 	thd_cnt++;
 	r = lwt_join(d);
-	assert(r != (void*)0x37337);
+
+	printf("fn_join r: %x\n",r);
+	//assert(r != (void*)0x37337);
 }
 
 #define IS_RESET()						\
@@ -100,70 +105,94 @@ fn_join(void *d)
 int
 main(void)
 {
+	free(malloc(0x4));	
 	lwt_t chld1, chld2;
 	int i;
 	unsigned long long start, end;
 
-
-	/* Performance tests */
+	
+		
+	// Performance tests 
 	rdtscll(start);
-	for (i = 0 ; i < ITER ; i++) {
+//	for (i = 0 ; i < ITER ; i++) {
 		chld1 = lwt_create(fn_null, NULL);
 		lwt_join(chld1);
-	}
+//	}
 	rdtscll(end);
+
 	printf("Overhead for fork/join is %lld\n", (end-start)/ITER);
-	IS_RESET();
+	//IS_RESET();
+
+
+
+/*	
 
 	chld1 = lwt_create(fn_bounce, NULL);
 	chld2 = lwt_create(fn_bounce, NULL);
+
 	lwt_join(chld1);
 	lwt_join(chld2);
-	IS_RESET();
 
-	/* functional tests: scheduling */
+
+	//IS_RESET();
+
+	// functional tests: scheduling 
 	lwt_yield(LWT_NULL);
 
 	chld1 = lwt_create(fn_sequence, (void*)1);
 	chld2 = lwt_create(fn_sequence, (void*)2);
 	lwt_join(chld2);
 	lwt_join(chld1);	
-	IS_RESET();
+	//IS_RESET();
 
-	/* functional tests: join */
+
+
+	// functional tests: join 
 	chld1 = lwt_create(fn_null, NULL);
 	lwt_join(chld1);
-	IS_RESET();
+	//IS_RESET();
 
 	chld1 = lwt_create(fn_null, NULL);
 	lwt_yield(LWT_NULL);
 	lwt_join(chld1);
-	IS_RESET();
+	//IS_RESET();
 
 	chld1 = lwt_create(fn_nested_joins, NULL);
 	lwt_join(chld1);
-	IS_RESET();
+	//IS_RESET();
+*/
+/*
 
-	/* functional tests: join only from parents */
+	// functional tests: join only from parents 
 	chld1 = lwt_create(fn_identity, (void*)0x37337);
+
+	printf("");
 	chld2 = lwt_create(fn_join, chld1);
+
+
 	lwt_yield(LWT_NULL);
 	lwt_yield(LWT_NULL);
 	lwt_join(chld2);
 	lwt_join(chld1);
-	IS_RESET();
+	//IS_RESET();
 
-	/* functional tests: passing data between threads */
+
+	// functional tests: passing data between threads 
 	chld1 = lwt_create(fn_identity, (void*)0x37337);
-	assert((void*)0x37337 == lwt_join(chld1));
-	IS_RESET();
 
-	/* functional tests: directed yield */
+	printf("%x \n",lwt_join(chld1));
+	//assert((void*)0x37337 == lwt_join(chld1));
+	//IS_RESET();
+
+	// functional tests: directed yield 
 	chld1 = lwt_create(fn_null, NULL);
 	lwt_yield(chld1);
 	assert(lwt_info(LWT_INFO_NTHD_ZOMBIES) == 1);
 	lwt_join(chld1);
-	IS_RESET();
+	//IS_RESET();
 	
 	assert(thd_cnt == ITER+12);
+
+*/
+	return 0;
 }

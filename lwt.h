@@ -29,7 +29,7 @@ typedef struct lwt_tcb_struct {
 	struct lwt_tcb_struct *parent; 	//parent tcb
 	struct lwt_tcb_struct *prev; 	//run queue prev pointer
 	struct lwt_tcb_struct *next; 	//run queue next pointer
-} lwt_tcb;
+} lwt_tcb; 
 
 
 //typedef lwt_tcb* lwt_t;
@@ -71,10 +71,10 @@ void
 __lwt_schedule(void);	//done
 
 void 
-__lwt_dispatch(lwt_tcb *next, lwt_tcb *curr); //done
+__lwt_dispatch(lwt_tcb *next, lwt_tcb *curr) ; //done
 
 void 
-__lwt_initial(lwt_tcb *thd); //done
+__lwt_initial(lwt_tcb *thd) ; //done
 
 extern void 
 __lwt_trampoline(); 
@@ -88,6 +88,8 @@ __lwt_start();	//done
 lwt_tcb *
 __get_thread(lwt_t lwt);
 
+void
+__queue_print(void);
 
 /* lwt info */
 int lwt_info(lwt_info_t t);
