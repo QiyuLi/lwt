@@ -2,43 +2,84 @@
 #define LWT_H
 
 #define MAX_THREAD_SIZE 1024 
-#define DEFAULT_STACK_SIZE 16384 // 16KB
+#define DEFAULT_STACK_SIZE 0x4000 // 16KB
 
 
 /* Thread Status */
-#define ACTIVE          0x00
-#define INTERRUPTED     0x01
-#define KILLED          0x10
+#define READY          0x00
+#define ACTIVE	       0x01
+#define RUNNABLE       0x02
+#define FINISHED       0x10
+
+//typedef int lwt_t;
+
+#define lwt_NULL -1
+
+typedef void *(*lwt_fn_t)(void *);
+
+typedef struct lwt_tcb_struct {
+        int tid;
+        int status;
+	void *stack;
+	void *bp; 			//base pointer of stack
+	void *sp;			//top pointer of satck
+	lwt_fn_t fn;
+	void * data;
+	void * retVal;			//return value of fn
+	struct lwt_tcb_struct *parent; 	//parent tcb
+	struct lwt_tcb_struct *prev; 	//run queue prev pointer
+	struct lwt_tcb_struct *next; 	//run queue next pointer
+} lwt_tcb;
+
+
+//typedef lwt_tcb* lwt_t;
 
 typedef int lwt_t;
 
-
-typedef struct lwt_tcb_struct {
-        int     tid;
-        int     status;
-	void *  stack;
-	struct lwt_tcb_struct *parent; //parent tcb
-	struct lwt_tcb_struct *next; //run queue next pointer
-        } lwt_tcb;
-
-
-typedef void *(*lwt_fn_t)(void *);
+typedef int lwt_tid;
 
 #endif
 
 /* lwt functions */
-lwt_t lwt_create(lwt_fn_t fn, void *data);
-void *lwt_join(lwt_t lwt);
-void lwt_die(void *val);
-int lwt_yield(lwt_t lwt);
-lwt_t lwt_current(void);
-int lwt_id(lwt_t lwt);
+lwt_t 
+lwt_create(lwt_fn_t fn, void *data); // done
+
+void *
+lwt_join(lwt_t lwt);	//TODO free memory
+
+void 
+lwt_die(void *val);	//done
+
+int 
+lwt_yield(lwt_t lwt);	//done
+
+lwt_t 
+lwt_current(void);	//done
+
+int 
+lwt_id(lwt_t lwt);		//done
+
 
 /* private lwt functions */
-void __lwt_schedule(void);
-void __lwt_dispatch(lwt_t next, lwt_t current);
-extern void __lwt_trampoline();
-extern void __lwt_trampoline_test();
-void __lwt_start();
-void __lwt_start_test(void *data);
+
+void 
+__lwt_schedule(void);	//done
+
+void 
+__lwt_dispatch(lwt_tcb *next, lwt_tcb *curr); //done
+
+void 
+__lwt_initial(lwt_tcb *thd); //done
+
+extern void 
+__lwt_trampoline(); 
+
+extern void 
+__lwt_trampoline_test(); //done
+
+void 
+__lwt_start();	//done
+
+lwt_tcb *
+__get_thread(lwt_t lwt);
 

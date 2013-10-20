@@ -11,6 +11,18 @@ __lwt_trampoline:
 .align 16
 .globl __lwt_trampoline_test
 __lwt_trampoline_test:
-	pop %eax
-	call __lwt_start_test
+	//pop %eax
+	//call __lwt_start_test
+	//ret
+
+	pushl	%ebp
+	movl	%esp, %ebp
+	subl	$24, %esp
+	movl    16(%ebp), %esp
+	movl	12(%ebp), %eax
+	movl	%eax, 4(%esp)
+	movl	8(%ebp), %eax
+	movl	%eax, (%esp)
+	call	__lwt_start
+	leave
 	ret
