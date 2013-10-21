@@ -1,111 +1,169 @@
-#include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #include <lwt.h>
 
+#define rdtscll(val) __asm__ __volatile__("rdtsc" : "=A" (val))
 
-void * joo(void *data)
+#define ITER 10000
+
+/* 
+ * My performance on an Intel Core i5-2520M CPU @ 2.50GHz:
+ * Overhead for fork/join is 105
+ * Overhead of yield is 26
+ * Overhead of yield is 26
+ */
+
+int thd_cnt = 0;
+
+void *
+fn_bounce(void *d) 
 {
-	printf("joo: %d\n", (int)data);
+	int i;
+	unsigned long long start, end;
 
-	//lwt_yield(NULL);
+	thd_cnt++;
+	lwt_yield(LWT_NULL);
+	lwt_yield(LWT_NULL);
+	rdtscll(start);
+	for (i = 0 ; i < ITER ; i++) lwt_yield(LWT_NULL);
+	rdtscll(end);
+	lwt_yield(LWT_NULL);
+	lwt_yield(LWT_NULL);
 
-	printf("joo: after yield \n");
+	if (!d) printf("Overhead of yield is %lld\n", (end-start)/ITER);
 
 	return NULL;
 }
 
-void * goo(void *data)
+void *
+fn_null(void *d)
+{ thd_cnt++; return NULL; }
+
+void *
+fn_identity(void *d)
+{ thd_cnt++; return d; }
+
+void *
+fn_nested_joins(void *d)
 {
-	printf("goo: %d\n", (int)data);
+	lwt_t chld;
 
-	//lwt_yield(NULL);
+	thd_cnt++;
+	if (d) {
+		lwt_yield(LWT_NULL);
+		lwt_yield(LWT_NULL);
+		assert(lwt_info(LWT_INFO_NTHD_RUNNABLE) == 1);
+		lwt_die(NULL);
+	}
+	chld = lwt_create(fn_nested_joins, (void*)1);
+	lwt_join(chld);
+}
 
-	printf("goo: after yield \n");
+volatile int sched[2] = {0, 0};
+volatile int curr = 0;
+
+void *
+fn_sequence(void *d)
+{
+	int i, other, val = (int)d;
+
+	thd_cnt++;
+	for (i = 0 ; i < ITER ; i++) {
+		other = curr;
+		curr  = (curr + 1) % 2;
+		sched[curr] = val;
+		assert(sched[other] != val);
+		lwt_yield(LWT_NULL);
+	}
 
 	return NULL;
 }
 
-void * bar(void *data)
+void *
+fn_join(void *d)
 {
-	printf("bar: %d\n", (int)data);
-	
-	//lwt_yield(lwt_NULL);
+	lwt_t t = (lwt_t)d;
+	void *r;
 
-	int i;
-	__asm__ __volatile__("movl %%ebp, %0\n\t"
-                             :"=r"(i)
-			     :
-                             :
-                             );
-	
-	printf("bar: after yield %x\n",i);
-
-	return (int)data * 10;
+	thd_cnt++;
+	r = lwt_join(d);
+	assert(r != (void*)0x37337);
 }
 
-void * foo(void *data)
+#define IS_RESET()						\
+        assert( lwt_info(LWT_INFO_NTHD_RUNNABLE) == 1 &&	\
+		lwt_info(LWT_INFO_NTHD_ZOMBIES) == 0 &&		\
+		lwt_info(LWT_INFO_NTHD_BLOCKED) == 0)
+
+int
+main(void)
 {
-	printf("foo: %d\n", (int)data);
-
-	//lwt_yield(0);
-
+	lwt_t chld1, chld2;
 	int i;
-	__asm__ __volatile__("movl %%ebp, %0\n\t"
-                             :"=r"(i)
-			     :
-                             :
-                             );
+	unsigned long long start, end;
 
-	printf("foo: after yield %x\n",i);
 
-	return (int)data * 10;
-}
+	/* Performance tests */
+	rdtscll(start);
+	for (i = 0 ; i < ITER ; i++) {
+		chld1 = lwt_create(fn_null, NULL);
+		lwt_join(chld1);
+	}
+	rdtscll(end);
+	printf("Overhead for fork/join is %lld\n", (end-start)/ITER);
+	IS_RESET();
 
-int main()
-{
-	printf("main: \n");
+	chld1 = lwt_create(fn_bounce, NULL);
+	chld2 = lwt_create(fn_bounce, NULL);
+	lwt_join(chld1);
+	lwt_join(chld2);
+	IS_RESET();
 
-	lwt_fn_t fn = foo;
-	void *data = (void *) 5;
-	lwt_t thd1 = lwt_create(fn,data);
+	/* functional tests: scheduling */
+	lwt_yield(LWT_NULL);
+
+	chld1 = lwt_create(fn_sequence, (void*)1);
+	chld2 = lwt_create(fn_sequence, (void*)2);
+	lwt_join(chld2);
+	lwt_join(chld1);	
+	IS_RESET();
+
+	/* functional tests: join */
+	chld1 = lwt_create(fn_null, NULL);
+	lwt_join(chld1);
+	IS_RESET();
+
+	chld1 = lwt_create(fn_null, NULL);
+	lwt_yield(LWT_NULL);
+	lwt_join(chld1);
+	IS_RESET();
+
+	chld1 = lwt_create(fn_nested_joins, NULL);
+	lwt_join(chld1);
+	IS_RESET();
+
+	/* functional tests: join only from parents */
+	chld1 = lwt_create(fn_identity, (void*)0x37337);
+	chld2 = lwt_create(fn_join, chld1);
+	lwt_yield(LWT_NULL);
+	lwt_yield(LWT_NULL);
+	lwt_join(chld2);
+	lwt_join(chld1);
+	IS_RESET();
+
+	/* functional tests: passing data between threads */
+	chld1 = lwt_create(fn_identity, (void*)0x37337);
+	assert((void*)0x37337 == lwt_join(chld1));
+	IS_RESET();
+
+	/* functional tests: directed yield */
+	chld1 = lwt_create(fn_null, NULL);
+	lwt_yield(chld1);
+	assert(lwt_info(LWT_INFO_NTHD_ZOMBIES) == 1);
+	lwt_join(chld1);
+	IS_RESET();
 	
-
-	fn = bar;
-	data = (void *) 10;
-	lwt_t thd2 = lwt_create(fn,data);
-
-/*
-
-
-	fn = goo;
-	data = (void *) 15;
-	lwt_t thd3 = lwt_create(fn,data);
-
-*/
-	//__lwt_initial(thd1);
-	//__lwt_initial(thd2);
-	//__run_queue_print();
-	//int i = __run_queue_remove(thd3);
-	//__run_queue_print();
-
-	lwt_tcb * temp = __get_tcb(thd1);
-
-	printf("main: stack %x \n", temp->stack);
-	
-	//free(temp->stack);
-
-
-	lwt_yield(thd1);
-
-
-	void *retVal = lwt_join(thd1);
-	printf("main: thd1 rt %d \n", (int)retVal);
-
-	retVal = lwt_join(thd2);
-	printf("main: thd2 rt %d \n", (int)retVal);
-
-
-        return 0;
+	assert(thd_cnt == ITER+12);
 }
