@@ -313,4 +313,8 @@ __lwt_start(lwt_fn_t fn, void * data)
 	lwt_yield(LWT_NULL);
 }
 
-
+int
+lwt_info(lwt_info_t t)
+{
+	return 0;
+}

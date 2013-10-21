@@ -38,6 +38,11 @@ typedef int lwt_t;
 
 typedef int lwt_tid;
 
+#define LWT_INFO_NTHD_RUNNABLE	0x1
+#define LWT_INFO_NTHD_ZOMBIES	0x2
+#define LWT_INFO_NTHD_BLOCKED	0x4
+
+typedef int lwt_info_t; //lwt info
 #endif
 
 /* lwt functions */
@@ -83,3 +88,6 @@ __lwt_start();	//done
 lwt_tcb *
 __get_thread(lwt_t lwt);
 
+
+/* lwt info */
+int lwt_info(lwt_info_t t);
