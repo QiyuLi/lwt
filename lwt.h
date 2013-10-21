@@ -13,7 +13,7 @@
 
 //typedef int lwt_t;
 
-#define lwt_NULL -1
+#define LWT_NULL -1
 
 typedef void *(*lwt_fn_t)(void *);
 

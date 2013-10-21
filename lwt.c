@@ -137,7 +137,7 @@ lwt_yield(lwt_t lwt)
 {
 	printf("lwt yield: \n");
 
-	if(lwt == lwt_NULL){
+	if(lwt == LWT_NULL){
 		__lwt_schedule();
         	return 0;
 	}
@@ -173,7 +173,7 @@ lwt_join(lwt_t lwt)
 	lwt_tcb *thd = tcb[lwt];
 	
 	while(thd->status != FINISHED)
-		lwt_yield(lwt_NULL);
+		lwt_yield(LWT_NULL);
 
 	void * retVal = thd->retVal;
 
@@ -310,7 +310,7 @@ __lwt_start(lwt_fn_t fn, void * data)
 
 	lwt_die(retVal);
 
-	lwt_yield(lwt_NULL);
+	lwt_yield(LWT_NULL);
 }
 
 
