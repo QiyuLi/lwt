@@ -16,7 +16,7 @@ int counter = 0;
 
 lwt_tcb *tcb[MAX_THREAD_SIZE];
 
-lwt_tcb *
+inline lwt_tcb *
 __get_tcb(lwt_t lwt)
 {
 	return tcb[lwt];
@@ -30,7 +30,7 @@ lwt_tcb *queue_tail = NULL;
 
 /* run queue functions */
 
-int 
+inline int 
 __queue_remove(lwt_tcb *thd)
 {
 	//printf("run queue remove: %d \n", thd->tid);
@@ -48,7 +48,7 @@ __queue_remove(lwt_tcb *thd)
 	return 0;
 }
 
-int 
+inline int 
 __queue_add(lwt_tcb *thd)
 {
 	//printf("run queue add: %d \n", thd->tid);
@@ -117,7 +117,6 @@ lwt_create(lwt_fn_t fn, void *data)
 	}
 
 
-rdtscll(start);
 
 	tcb[temp] = malloc(sizeof(lwt_tcb));
 
@@ -137,7 +136,6 @@ rdtscll(start);
 
 	__queue_add(tcb[temp]);
 
-rdtscll(end);
 	counter++;
 
 
@@ -172,13 +170,13 @@ lwt_yield(lwt_t lwt)
 	return 0;
 }
 
-lwt_t 
+inline lwt_t 
 lwt_current(void)
 {
         return curr_thd->tid;
 }
 
-int 
+inline int 
 lwt_id(lwt_t lwt)
 {
         return lwt;
@@ -189,7 +187,6 @@ lwt_join(lwt_t lwt)
 {	
 	//printf("lwt join: \n");
 
-rdtscll(start);
 
 	lwt_tcb *thd = tcb[lwt];
 
@@ -206,13 +203,12 @@ rdtscll(start);
 		free(thd->stack);
 	//free(thd);
 
-rdtscll(end);
 
 //printf("Overhead  of join is %lld\n", (end-start));
         return retVal;
 }
 
-void 
+inline void 
 lwt_die(void *val)
 {
 	curr_thd->status = FINISHED;
@@ -247,6 +243,7 @@ __lwt_schedule(void)
 	__lwt_dispatch(curr_thd,prev_thd);
 }
 
+__attribute__ ((noinline))
 void 
 __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
 {
@@ -300,6 +297,7 @@ return_here:
 	return;
 }
 
+__attribute__ ((noinline))
 void 
 __lwt_initial(lwt_tcb *thd) 
 {
@@ -335,7 +333,7 @@ __lwt_initial(lwt_tcb *thd)
 	//__lwt_trampoline();
 }
 
-void 
+inline void 
 __lwt_start(lwt_fn_t fn, void * data)
 {
        	//printf("__lwt_start: tid %d \n", curr_thd->tid);	
@@ -349,7 +347,7 @@ __lwt_start(lwt_fn_t fn, void * data)
 	lwt_yield(LWT_NULL);
 }
 
-int
+inline int
 lwt_info(lwt_info_t t)
 {
 	switch( t ) 
