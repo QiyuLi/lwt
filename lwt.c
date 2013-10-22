@@ -251,24 +251,13 @@ __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
 	//printf("lwt_dispatch: next %x %x %x\n", next->tid, next->bp, next->sp);
 	//printf("lwt_dispatch: curr %x %x %x\n", curr->tid, curr->bp, curr->sp);
 
-	__asm__ __volatile__("push %0\n\t"
-                             :
-			     :"r"(&&return_here)
-                             : 
+	__asm__ __volatile__("push %2\n"
+						"pushal\n"
+						"movl %%esp, %0\n"
+						"movl %%ebp, %1\n"
+							:"=r"(curr->sp),"=r"(curr->bp)
+							:"r"(&&return_here)
                             );	
-
-	__asm__ __volatile__("pushal\n\t"
-			    );	
-	__asm__ __volatile__("movl %%esp, %0\n\t"
-                             :"=r"(curr->sp)
-			     :
-                             :
-                            );
-	__asm__ __volatile__("movl %%ebp, %0\n\t"
-                             :"=r"(curr->bp)
-			     :
-                             :
-                            );
 	
 
 	if(next->status == READY){
@@ -276,20 +265,14 @@ __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
 	    	__lwt_initial(next);		
 	}
 	else{	
-		__asm__ __volatile__("mov %0,%%esp\n\t"
+		__asm__ __volatile__("mov %0,%%esp\n"
+							"mov %0,%%ebp\n"
+							"popal\n"
+							"ret\n"
                              	     :
-			             :"r"(next->sp)
+			             :"r"(next->sp), "r"(next->bp)
                                      : 
                             	    );
-		__asm__ __volatile__("mov %0,%%ebp\n\t"
-                                     :
-			     	     :"r"(next->bp)
-                                     : 
-                                    );
-		__asm__ __volatile__("popal\n\t"
-				    );	
-		__asm__ __volatile__("ret\n\t"
-				    );
 	}
 	
 
@@ -301,35 +284,23 @@ __attribute__ ((noinline))
 void 
 __lwt_initial(lwt_tcb *thd) 
 {
-	__asm__ __volatile__("subl $4,%esp\n\t"
+	__asm__ __volatile__("subl $4,%esp\n"
                             );
 
-	__asm__ __volatile__("movl %0,%%eax\n\t"
+	__asm__ __volatile__("subl $4,%esp\n"
+						"movl %0,%%eax\n"
+						"movl %eax,0x8(%esp)\n"
+						"mov %1,%%eax\n"
+						"mov %eax,0x4(%esp)\n"
+						"mov %2,%%eax\n"
+						"mov %eax,(%esp)\n"
+						"call __lwt_trampoline_test"
                              :
-			     :"r"(thd->bp)
+							:"r"(thd->bp),"r"(thd->data),"r"(thd->fn)
                              :"%eax"
                              );
-	__asm__ __volatile__("movl %eax,0x8(%esp)\n\t"
-                             );
 
 
-	__asm__ __volatile__("mov %0,%%eax\n\t"
-                             :
-			     :"r"(thd->data)
-                             :"%eax"
-                             );
-	__asm__ __volatile__("mov %eax,0x4(%esp)\n\t"
-                             );
-
-	__asm__ __volatile__("mov %0,%%eax\n\t"
-                             :
-			     :"r"(thd->fn)
-                             :"%eax"
-                             );
-	__asm__ __volatile__("mov %eax,(%esp)\n\t"			
-                             );
-
-	__lwt_trampoline_test();
 	//__lwt_trampoline();
 }
 
