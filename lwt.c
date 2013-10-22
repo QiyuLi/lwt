@@ -16,7 +16,7 @@ int counter = 0;
 
 lwt_tcb *tcb[MAX_THREAD_SIZE];
 
-inline lwt_tcb *
+lwt_tcb *
 __get_tcb(lwt_t lwt)
 {
 	return tcb[lwt];
@@ -30,7 +30,7 @@ lwt_tcb *queue_tail = NULL;
 
 /* run queue functions */
 
-inline int 
+int 
 __queue_remove(lwt_tcb *thd)
 {
 	//printf("run queue remove: %d \n", thd->tid);
@@ -51,7 +51,7 @@ __queue_remove(lwt_tcb *thd)
 	return 0;
 }
 
-inline int 
+int 
 __queue_add(lwt_tcb *thd)
 {
 	//printf("run queue add: %d \n", thd->tid);
@@ -175,13 +175,13 @@ lwt_yield(lwt_t lwt)
 	return 0;
 }
 
-inline lwt_t 
+lwt_t 
 lwt_current(void)
 {
         return curr_thd->tid;
 }
 
-inline int 
+int 
 lwt_id(lwt_t lwt)
 {
         return lwt;
@@ -213,7 +213,7 @@ lwt_join(lwt_t lwt)
         return (void *) retVal;
 }
 
-inline void 
+void 
 lwt_die(void *val)
 {
 	curr_thd->status = FINISHED;
@@ -306,13 +306,13 @@ __lwt_initial(lwt_tcb *thd)
 	//__lwt_trampoline();
 }
 
-inline void 
+__attribute__ ((noinline))
+void 
 __lwt_start(lwt_fn_t fn, void * data)
 {
        	//printf("__lwt_start: tid %d \n", curr_thd->tid);	
 
 	void * retVal = fn(data);
-	
 	//printf("__lwt_start: tid %d retVal %d \n", curr_thd->tid, (int)retVal);
 
 	lwt_die(retVal);
@@ -320,7 +320,7 @@ __lwt_start(lwt_fn_t fn, void * data)
 	lwt_yield(LWT_NULL);
 }
 
-inline int
+int
 lwt_info(lwt_info_t t)
 {
 	switch( t ) 
