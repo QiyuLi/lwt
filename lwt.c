@@ -16,7 +16,7 @@ int counter = 0;
 
 lwt_tcb *tcb[MAX_THREAD_SIZE];
 
-lwt_tcb *
+inline lwt_tcb *
 __get_tcb(lwt_t lwt)
 {
 	return tcb[lwt];
@@ -30,15 +30,10 @@ lwt_tcb *queue_tail = NULL;
 
 /* run queue functions */
 
-int 
+inline int 
 __queue_remove(lwt_tcb *thd)
 {
 	//printf("run queue remove: %d \n", thd->tid);
-
-
-rdtscll(start);
-
-
 
 	if(!thd)
 		return -1;
@@ -50,22 +45,17 @@ rdtscll(start);
 	else
 		queue_tail = NULL;
 
-rdtscll(end);
 
 //printf("Overhead  of queue remove is %lld\n", (end-start));
 
 	return 0;
-
-
-
 }
 
 inline int 
 __queue_add(lwt_tcb *thd)
 {
 	//printf("run queue add: %d \n", thd->tid);
-unsigned long long start, end;
-rdtscll(start);
+
 	if(!thd)
 		return -1;
 	
@@ -79,8 +69,6 @@ rdtscll(start);
 	}
 
 	queue_tail = thd;
-
-rdtscll(end);
 
 //printf("Overhead  of queue add is %lld\n", (end-start));
 	return 0;
@@ -118,10 +106,8 @@ lwt_create(lwt_fn_t fn, void *data)
 	//add main tread
 	if(!temp){
 
-unsigned long long start1, end1;
-rdtscll(start1);
 		queue_head = malloc(sizeof(lwt_tcb));
-rdtscll(end1);
+
 		tcb[temp] = malloc(sizeof(lwt_tcb));
 
 		tcb[temp]->tid    = temp;
@@ -139,12 +125,7 @@ rdtscll(end1);
 
 	tcb[temp] = malloc(sizeof(lwt_tcb));
 
-
-
 	tcb[temp]->stack  = malloc(DEFAULT_STACK_SIZE);
-
-
-
 
 	tcb[temp]->tid    = temp;
 	tcb[temp]->status = READY;
@@ -155,12 +136,11 @@ rdtscll(end1);
 	tcb[temp]->next   = NULL;
 	tcb[temp]->prev   = NULL;
 
-unsigned long long start, end;
-rdtscll(start);
+
+
 
 	__queue_add(tcb[temp]);
 
-rdtscll(end);
 	counter++;
 
 
@@ -195,13 +175,13 @@ lwt_yield(lwt_t lwt)
 	return 0;
 }
 
-lwt_t 
+inline lwt_t 
 lwt_current(void)
 {
         return curr_thd->tid;
 }
 
-int 
+inline int 
 lwt_id(lwt_t lwt)
 {
         return lwt;
@@ -212,7 +192,6 @@ lwt_join(lwt_t lwt)
 {	
 	//printf("lwt join: \n");
 
-rdtscll(start);
 
 	lwt_tcb *thd = tcb[lwt];
 
@@ -229,13 +208,12 @@ rdtscll(start);
 		free(thd->stack);
 	//free(thd);
 
-rdtscll(end);
 
 //printf("Overhead  of join is %lld\n", (end-start));
         return (void *) retVal;
 }
 
-void 
+inline void 
 lwt_die(void *val)
 {
 	curr_thd->status = FINISHED;
@@ -270,6 +248,7 @@ __lwt_schedule(void)
 	__lwt_dispatch(curr_thd,prev_thd);
 }
 
+__attribute__ ((noinline))
 void 
 __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
 {
@@ -277,24 +256,13 @@ __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
 	//printf("lwt_dispatch: next %x %x %x\n", next->tid, next->bp, next->sp);
 	//printf("lwt_dispatch: curr %x %x %x\n", curr->tid, curr->bp, curr->sp);
 
-	__asm__ __volatile__("push %0\n\t"
-                             :
-			     :"r"(&&return_here)
-                             : 
+	__asm__ __volatile__("push %2\n"
+						"pushal\n"
+						"movl %%esp, %0\n"
+						"movl %%ebp, %1\n"
+							:"=r"(curr->sp),"=r"(curr->bp)
+							:"r"(&&return_here)
                             );	
-
-	__asm__ __volatile__("pushal\n\t"
-			    );	
-	__asm__ __volatile__("movl %%esp, %0\n\t"
-                             :"=r"(curr->sp)
-			     :
-                             :
-                            );
-	__asm__ __volatile__("movl %%ebp, %0\n\t"
-                             :"=r"(curr->bp)
-			     :
-                             :
-                            );
 	
 
 	if(next->status == READY){
@@ -302,20 +270,14 @@ __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
 	    	__lwt_initial(next);		
 	}
 	else{	
-		__asm__ __volatile__("mov %0,%%esp\n\t"
+		__asm__ __volatile__("mov %0,%%esp\n"
+							"mov %0,%%ebp\n"
+							"popal\n"
+							"ret\n"
                              	     :
-			             :"r"(next->sp)
+			             :"r"(next->sp), "r"(next->bp)
                                      : 
                             	    );
-		__asm__ __volatile__("mov %0,%%ebp\n\t"
-                                     :
-			     	     :"r"(next->bp)
-                                     : 
-                                    );
-		__asm__ __volatile__("popal\n\t"
-				    );	
-		__asm__ __volatile__("ret\n\t"
-				    );
 	}
 	
 
@@ -323,42 +285,28 @@ return_here:
 	return;
 }
 
+__attribute__ ((noinline))
 void 
 __lwt_initial(lwt_tcb *thd) 
 {
-	__asm__ __volatile__("subl $4,%esp\n\t"
-                            );
-
-	__asm__ __volatile__("movl %0,%%eax\n\t"
+	__asm__ __volatile__("subl $4,%%esp\n"
+						"movl %0,%%eax\n"
+						"movl %%eax,0x8(%%esp)\n"
+						"mov %1,%%eax\n"
+						"mov %%eax,0x4(%%esp)\n"
+						"mov %2,%%eax\n"
+						"mov %%eax,(%%esp)\n"
+						"call __lwt_trampoline_test"
                              :
-			     :"r"(thd->bp)
-                             :"%eax"
-                             );
-	__asm__ __volatile__("movl %eax,0x8(%esp)\n\t"
-                             );
-
-
-	__asm__ __volatile__("mov %0,%%eax\n\t"
+							:"r"(thd->bp),"r"(thd->data),"r"(thd->fn)
                              :
-			     :"r"(thd->data)
-                             :"%eax"
-                             );
-	__asm__ __volatile__("mov %eax,0x4(%esp)\n\t"
                              );
 
-	__asm__ __volatile__("mov %0,%%eax\n\t"
-                             :
-			     :"r"(thd->fn)
-                             :"%eax"
-                             );
-	__asm__ __volatile__("mov %eax,(%esp)\n\t"			
-                             );
 
-	__lwt_trampoline_test();
 	//__lwt_trampoline();
 }
 
-void 
+inline void 
 __lwt_start(lwt_fn_t fn, void * data)
 {
        	//printf("__lwt_start: tid %d \n", curr_thd->tid);	
@@ -372,7 +320,7 @@ __lwt_start(lwt_fn_t fn, void * data)
 	lwt_yield(LWT_NULL);
 }
 
-int
+inline int
 lwt_info(lwt_info_t t)
 {
 	switch( t ) 

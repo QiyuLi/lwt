@@ -6,7 +6,7 @@
 
 #define rdtscll(val) __asm__ __volatile__("rdtsc" : "=A" (val))
 
-#define ITER 1
+#define ITER 100
 
 /* 
  * My performance on an Intel Core i5-2520M CPU @ 2.50GHz:
@@ -108,16 +108,17 @@ main(void)
 	free(malloc(0x4));	
 	lwt_t chld1, chld2;
 	int i;
+
 	unsigned long long start, end;
 
 	
 		
 	// Performance tests 
 	rdtscll(start);
-//	for (i = 0 ; i < ITER ; i++) {
+	for (i = 0 ; i < ITER ; i++) {
 		chld1 = lwt_create(fn_null, NULL);
 		lwt_join(chld1);
-//	}
+	}
 	rdtscll(end);
 
 	printf("Overhead for fork/join is %lld\n", (end-start)/ITER);
