@@ -47,7 +47,7 @@ typedef int lwt_info_t; //lwt info
 
 /* lwt functions */
 lwt_t 
-lwt_create(lwt_fn_t fn, void *data) __attribute__ ((always_inline)); // done
+lwt_create(lwt_fn_t fn, void *data) ; // done
 
 void *
 lwt_join(lwt_t lwt);	//TODO free memory
@@ -83,7 +83,7 @@ extern void
 __lwt_trampoline_test(); //done
 
 void 
-__lwt_start();	//done
+__lwt_start() __attribute__ ((noinline));	//done
 
 lwt_tcb *
 __get_thread(lwt_t lwt);
