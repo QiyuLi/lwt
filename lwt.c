@@ -52,7 +52,7 @@ rdtscll(start);
 
 rdtscll(end);
 
-printf("Overhead  of queue remove is %lld\n", (end-start));
+//printf("Overhead  of queue remove is %lld\n", (end-start));
 
 	return 0;
 
@@ -60,7 +60,7 @@ printf("Overhead  of queue remove is %lld\n", (end-start));
 
 }
 
-int 
+inline int 
 __queue_add(lwt_tcb *thd)
 {
 	//printf("run queue add: %d \n", thd->tid);
@@ -82,7 +82,7 @@ rdtscll(start);
 
 rdtscll(end);
 
-printf("Overhead  of queue add is %lld\n", (end-start));
+//printf("Overhead  of queue add is %lld\n", (end-start));
 	return 0;
 }
 
@@ -92,19 +92,19 @@ __queue_print(void)
 	lwt_tcb *temp; 
 
 	if(curr_thd)
-	   	printf("curr %d \n",curr_thd->tid);
+	   	//printf("curr %d \n",curr_thd->tid);
 
 	for(temp = queue_head->next; temp; temp = temp->next){   
-	    	printf("%d ",temp->tid);
+	    	//printf("%d ",temp->tid);
 	}
 
-	printf("\n");
+	//printf("\n");
 	
 	for(temp = queue_tail; temp != queue_head; temp = temp->prev){   
-	    	printf("%d ",temp->tid);
+	    	//printf("%d ",temp->tid);
 	}
 
-	printf("\n");
+	//printf("\n");
 }
 
 /* lwt functions */
@@ -132,7 +132,7 @@ rdtscll(end1);
 		temp++;
 		counter++;
 
-printf("in main is %lld\n", (end1-start1));
+//printf("in main is %lld\n", (end1-start1));
 	}
 
 
@@ -165,7 +165,7 @@ rdtscll(end);
 
 
 
-printf("Overhead  of lwt_create is %lld\n", (end-start));
+//printf("Overhead  of lwt_create is %lld\n", (end-start));
 
 	//fn(data);
 
@@ -231,8 +231,8 @@ rdtscll(start);
 
 rdtscll(end);
 
-printf("Overhead  of join is %lld\n", (end-start));
-        return retVal;
+//printf("Overhead  of join is %lld\n", (end-start));
+        return (void *) retVal;
 }
 
 void 

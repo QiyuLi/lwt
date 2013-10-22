@@ -47,7 +47,7 @@ typedef int lwt_info_t; //lwt info
 
 /* lwt functions */
 lwt_t 
-lwt_create(lwt_fn_t fn, void *data); // done
+lwt_create(lwt_fn_t fn, void *data) __attribute__ ((always_inline)); // done
 
 void *
 lwt_join(lwt_t lwt);	//TODO free memory
