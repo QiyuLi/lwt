@@ -6,7 +6,7 @@
 
 #define rdtscll(val) __asm__ __volatile__("rdtsc" : "=A" (val))
 
-#define ITER 100
+#define ITER 1000
 
 /* 
  * My performance on an Intel Core i5-2520M CPU @ 2.50GHz:
@@ -20,6 +20,8 @@ int thd_cnt = 0;
 void *
 fn_bounce(void *d) 
 {
+
+
 	int i;
 	unsigned long long start, end;
 
@@ -28,8 +30,14 @@ fn_bounce(void *d)
 
 	lwt_yield(LWT_NULL);
 	lwt_yield(LWT_NULL);
+
+
 	rdtscll(start);
-	for (i = 0 ; i < ITER ; i++) lwt_yield(LWT_NULL);
+	for (i = 0 ; i < ITER ; i++)
+	{	 	
+
+		lwt_yield(LWT_NULL);
+	}
 	rdtscll(end);
 	lwt_yield(LWT_NULL);
 	lwt_yield(LWT_NULL);
@@ -42,7 +50,9 @@ fn_bounce(void *d)
 
 void *
 fn_null(void *d)
-{ thd_cnt++; return NULL; }
+{ thd_cnt++; 
+
+return d; }
 
 void *
 fn_identity(void *d)
@@ -104,48 +114,41 @@ fn_join(void *d)
 
 int
 main(void)
-{
-	free(malloc(0x4));	
+{	
 	lwt_t chld1, chld2;
 	int i;
-
-	unsigned long long start, end;
+	
+	unsigned long long start, end,start2, end2;
 
 	
-		
 	// Performance tests 
 	rdtscll(start);
-	for (i = 0 ; i < ITER ; i++) {
-		chld1 = lwt_create(fn_null, NULL);
-		lwt_join(chld1);
+	for (i = 0 ; i < ITER ; i++) {		
+		chld1 = lwt_create(fn_null,NULL);
+		lwt_join(chld1);		
 	}
 	rdtscll(end);
-
 	printf("Overhead for fork/join is %lld\n", (end-start)/ITER);
 	//IS_RESET();
 
-
-
-/*	
-
 	chld1 = lwt_create(fn_bounce, NULL);
 	chld2 = lwt_create(fn_bounce, NULL);
-
+	//chld2 = lwt_create(fn_bounce, NULL);
 	lwt_join(chld1);
 	lwt_join(chld2);
 
-
-	//IS_RESET();
+	lwt_yield(LWT_NULL);
+	//IS_RESET();	
+	
 
 	// functional tests: scheduling 
-	lwt_yield(LWT_NULL);
+
 
 	chld1 = lwt_create(fn_sequence, (void*)1);
 	chld2 = lwt_create(fn_sequence, (void*)2);
 	lwt_join(chld2);
 	lwt_join(chld1);	
 	//IS_RESET();
-
 
 
 	// functional tests: join 
@@ -161,8 +164,7 @@ main(void)
 	chld1 = lwt_create(fn_nested_joins, NULL);
 	lwt_join(chld1);
 	//IS_RESET();
-*/
-/*
+
 
 	// functional tests: join only from parents 
 	chld1 = lwt_create(fn_identity, (void*)0x37337);
@@ -188,10 +190,10 @@ main(void)
 	// functional tests: directed yield 
 	chld1 = lwt_create(fn_null, NULL);
 	lwt_yield(chld1);
-	assert(lwt_info(LWT_INFO_NTHD_ZOMBIES) == 1);
+	//assert(lwt_info(LWT_INFO_NTHD_ZOMBIES) == 1);
 	lwt_join(chld1);
 	//IS_RESET();
-	
+/*	
 	assert(thd_cnt == ITER+12);
 
 */
