@@ -2,7 +2,7 @@
 #define LWT_H
 
 #define MAX_THREAD_SIZE 1024 
-#define DEFAULT_STACK_SIZE 0x4000 // 16KB
+#define DEFAULT_STACK_SIZE 0x400 // 16KB
 
 
 /* Thread Status */
@@ -71,25 +71,27 @@ void
 __lwt_schedule(void);	//done
 
 void 
-__lwt_dispatch(lwt_tcb *next, lwt_tcb *curr) ; //done
+__lwt_dispatch(lwt_tcb *next, lwt_tcb *curr) __attribute__ ((noinline)); //done
 
 void 
-__lwt_initial(lwt_tcb *thd) ; //done
+__lwt_initial(lwt_tcb *thd) __attribute__ ((noinline)); //done
 
 extern void 
 __lwt_trampoline(); 
 
 extern void 
-__lwt_trampoline_test(); //done
+__lwt_trampoline_test() __attribute__ ((noinline)); //done
 
 void 
-__lwt_start() __attribute__ ((noinline));	//done
+__lwt_start(lwt_fn_t fn, void *data) __attribute__ ((noinline));	//done
 
 lwt_tcb *
 __get_thread(lwt_t lwt);
 
 void
-__queue_print(void);
+__queue_print(int i);
+
+
 
 /* lwt info */
 int lwt_info(lwt_info_t t);
