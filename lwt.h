@@ -1,28 +1,30 @@
 #ifndef LWT_H
 #define LWT_H
 
-#define MAX_THREAD_SIZE 1024 
-#define DEFAULT_STACK_SIZE 0x400 // 16KB
+#define MAX_THREAD_SIZE		1024 
+#define DEFAULT_STACK_SIZE	0x400 // 16KB
 
 
 /* Thread Status */
-#define READY          0x00
-#define ACTIVE	       0x01
-#define RUNNABLE       0x02
-#define FINISHED       0x10
+//#define LWT_READY			0x00
+#define LWT_ACTIVE			0x01
+#define LWT_RUNNABLE		0x02
+#define LWT_ZOMBIES			0x04
+#define LWT_BLOCKED			0x08
 
 //typedef int lwt_t;
-
-#define LWT_NULL -1
+#define LWT_NULL			NULL
 
 typedef void *(*lwt_fn_t)(void *);
 
 typedef struct lwt_tcb_struct {
-        int tid;
-        int status;
-	void *stack;
 	void *bp; 			//base pointer of stack
 	void *sp;			//top pointer of satck
+	void *ip;			//Instruction pointer
+	void *stack;
+	int tid;
+	int status;
+	
 	lwt_fn_t fn;
 	void * data;
 	void * retVal;			//return value of fn
@@ -32,18 +34,17 @@ typedef struct lwt_tcb_struct {
 } lwt_tcb; 
 
 
-//typedef lwt_tcb* lwt_t;
-
-typedef int lwt_t;
-
+typedef lwt_tcb* lwt_t;
 typedef int lwt_tid;
 
+// For test purpose
 #define LWT_INFO_NTHD_RUNNABLE	0x1
 #define LWT_INFO_NTHD_ZOMBIES	0x2
 #define LWT_INFO_NTHD_BLOCKED	0x4
-
 typedef int lwt_info_t; //lwt info
-#endif
+
+
+#endif //endif LWT_H
 
 /* lwt functions */
 lwt_t 
@@ -74,7 +75,7 @@ void
 __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr) __attribute__ ((noinline)); //done
 
 void 
-__lwt_initial(lwt_tcb *thd) __attribute__ ((noinline)); //done
+__lwt_initial() __attribute__ ((noinline)); //done
 
 extern void 
 __lwt_trampoline(); 

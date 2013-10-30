@@ -21,28 +21,23 @@ volatile unsigned long long startx, endx;
 
 
 /* Global Variables */
+int counter = 0; //TID self increase counter
 
-int counter = 0;
+lwt_t tcb[MAX_THREAD_SIZE];
+void *tcb_index = NULL;
+void *stack_index = NULL;
 
-lwt_tcb *tcb[MAX_THREAD_SIZE];
-void *tcb_index;
-void *stack_index;
+lwt_t curr_thd = NULL;
 
-lwt_tcb *
-__get_tcb(lwt_t lwt)
-{
-	return tcb[lwt];
-}
-
-lwt_tcb *curr_thd;
-lwt_tcb *queue_head = NULL;
-lwt_tcb *queue_tail = NULL;
+void *tramp_addr = NULL;
 
 
 /* run queue functions */
+lwt_t queue_head = NULL;
+lwt_t queue_tail = NULL;
 
 int 
-__queue_remove(lwt_tcb *thd)
+__queue_remove(lwt_t thd)
 {
 	if(!thd)
 		return -1;
@@ -112,45 +107,52 @@ __queue_print(int i)
 	printf("\n");
 }
 
+
 /* lwt functions */
-
-
-lwt_t 
+lwt_t
 lwt_create(lwt_fn_t fn, void *data)
 {
+	int tid = -1;
+	tid = counter++;
+	lwt_t t = NULL;
 
-	int temp = counter;
-
-	if(!temp){
+	if(!tid){
+		// Initialize memory
 		tcb_index   = malloc(sizeof(lwt_tcb) * MAX_THREAD_SIZE);
 		stack_index = malloc(DEFAULT_STACK_SIZE * MAX_THREAD_SIZE);
 		queue_head  = malloc(sizeof(lwt_tcb));
 
-		tcb[temp]         = tcb_index;
-		tcb[temp]->tid    = temp;
-		tcb[temp]->status = RUNNABLE;
-		
-		curr_thd = tcb[temp];
-		
-		temp++;
-		counter++;
+		// Initialize tramp address
+		__asm__ __volatile__("LEAL __lwt_initial, %0"
+							:"=r" (tramp_addr)
+							);
 
-		//printf("lwt create: add main %x\n",tcb[temp]->status);
+		// Assign main thread tcb
+		t = tcb_index;
+		tcb[tid] = t;
+		t->tid    = tid;
+		t->status = LWT_ACTIVE;
+		
+		curr_thd = t;
+		//printf("lwt create: add main %x\n",tcb[tid]->status);
 	}
 
-	tcb[temp]         = tcb_index + sizeof(lwt_tcb) * temp;
-	tcb[temp]->stack  = stack_index + DEFAULT_STACK_SIZE * temp;
-	tcb[temp]->tid    = temp;
-	tcb[temp]->status = READY;	
-	tcb[temp]->bp     = tcb[temp]->stack + DEFAULT_STACK_SIZE - 0x4 ;
-	tcb[temp]->fn     = fn;
-	tcb[temp]->data   = data;
+	tid=counter++;
 
-	counter++;
+	// Assign child thread
+	t = tcb_index + sizeof(lwt_tcb) * tid;
+	tcb[tid] = t;
+	t->stack  = stack_index + DEFAULT_STACK_SIZE * tid;
+	t->tid    = tid;
+	t->status = LWT_RUNNABLE;	
+	t->bp     = t->stack + DEFAULT_STACK_SIZE - 0x4 ;
+	t->ip		= tramp_addr;
+	t->fn     = fn;
+	t->data   = data;
 
-	__queue_add(tcb[temp]);
+	__queue_add(t);
 
-	return temp;
+	return t;
 
 }
 
@@ -168,8 +170,8 @@ lwt_yield(lwt_t lwt)
         	return 0;
 	}
 
-	lwt_tcb *prev_thd = curr_thd;
-	curr_thd = tcb[lwt];
+	lwt_t prev_thd = curr_thd;
+	curr_thd = lwt;
 
 	__queue_remove(curr_thd);
 
@@ -191,7 +193,7 @@ lwt_current(void)
 int 
 lwt_id(lwt_t lwt)
 {
-        return lwt;
+        return lwt->tid;
 }
 
 void *
@@ -199,11 +201,11 @@ lwt_join(lwt_t lwt)
 {
 //unsigned long long start1, end1;
 
-	lwt_tcb *thd = tcb[lwt];
+	lwt_t thd = lwt;
 
 	int i = 0;
 
-	while(thd->status != FINISHED){
+	while(thd->status != LWT_ZOMBIES){
 		i++;
 //rdtscll(start1);
 		//printf("lwt join while: tid %x status %x \n",thd->tid,thd->status);
@@ -212,27 +214,26 @@ lwt_join(lwt_t lwt)
 //printf("Overhead  of lwt_join is %lld %d\n", (end1-start1),i);
 		
 	}
-	void * retVal = thd->retVal;
+	void *retVal = thd->retVal;
 
 	//if(!thd->stack)
 	//	free(thd->stack);
 	//free(thd);
 
-        return (void *) retVal;
+	return retVal;
 }
 
 void 
 lwt_die(void *val)
 {
-	curr_thd->status = FINISHED;
+	curr_thd->status = LWT_ZOMBIES;
 	curr_thd->retVal = val;	
 
 	//printf("lwt_die\n");
 }
 
+
 /* private lwt functions */
-
-
 void 
 __lwt_schedule(void)
 {
@@ -241,12 +242,12 @@ __lwt_schedule(void)
 	if(!queue_head || !queue_head->next)
 		return;
 
-	lwt_tcb *prev_thd = curr_thd;
+	lwt_t prev_thd = curr_thd;
 
 
 	curr_thd = queue_head->next;
 	
-	if(prev_thd->status != FINISHED)
+	if(prev_thd->status != LWT_ZOMBIES)
 		__queue_add(prev_thd);
 
 	__queue_remove(curr_thd);
@@ -260,84 +261,42 @@ __lwt_schedule(void)
 
 }
 
-__attribute__ ((noinline))
 void 
-__lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
+__lwt_dispatch(lwt_t next, lwt_t curr)
 {
-
-
-
 	//printf("lwt_dispatch: next %x %x %x\n", next->tid, next->bp, next->sp);
 	//printf("lwt_dispatch: curr %x %x %x\n", curr->tid, curr->bp, curr->sp);
 
 	//assert(next->fn);
 
-	__asm__ __volatile__("push %2\n"
-			     "pushal\n"
-			     "movl %%esp, %0\n"
-			     "movl %%ebp, %1\n"
-			     :"=r"(curr->sp),"=r"(curr->bp)
-			     :"r"(&&return_here)
-                            );	
-	
-
-	if(next->status == READY){
-		next->status = RUNNABLE;
-	    	__lwt_initial(next);		
-	}
-	else{	
-		__asm__ __volatile__("mov %0,%%esp\n"
-				     "mov %1,%%ebp\n"
-				     "popal\n"
-				     "ret\n"
-                             	     :
-			             :"r"(next->sp), "r"(next->bp)
-                                     : 
-                            	    );
-	}
-	
-
-return_here:
+	__asm__ __volatile__(	"pushal\n"
+							"push $1f\n"
+							"movl %%ebp, %0\n"
+							"movl %%esp, %1\n"
+							"movl %2,%%esp\n"
+							"movl %3,%%ebp\n"
+							"ret\n"
+							"1:"
+							"popal\n"
+							:"=r"(curr->bp),"=r"(curr->sp)
+							:"r"(next->sp), "r"(next->bp)
+						);
 	return;
 }
 
-__attribute__ ((noinline))
 void 
-__lwt_initial(lwt_tcb *thd) 
+__lwt_initial() 
 {
 	//assert(thd);
 	//printf("__lwt_initial: %x %x %d\n", thd->bp, thd->fn, thd->data);
-
-
-
-	__asm__ __volatile__("movl %0,%%esp\n\t"
-                             :
-			     :"r"(thd->bp - 8)
-                             :
-                             );
-
-
-	__asm__ __volatile__("movl %0,(%%esp)\n\t"
-                             :
-			     :"r"(thd->fn)
-                             :
-                             );
-//rdtscll(startx);
-	__asm__ __volatile__("movl %0,0x4(%%esp)\n\t"
-                             :
-			     :"r"(thd->data)
-                             :
-                             );
-
-//rdtscll(endx);
-
-	__asm__ __volatile__("call __lwt_trampoline_test\n\t"			
-                             );
-
-	//__lwt_trampoline();
+	__asm__ __volatile__(	"push %0\n"
+							"push %1\n"
+							"call __lwt_trampoline_test\n"
+							:
+							:"r" (curr_thd->data), "r" (curr_thd->fn)
+						);
 }
 
-__attribute__ ((noinline))
 void 
 __lwt_start(lwt_fn_t fn, void * data)
 {
@@ -348,14 +307,12 @@ __lwt_start(lwt_fn_t fn, void * data)
 	//assert(fn > 0x80000);
        	//printf("__lwt_start: %x %d\n", fn, data);	
 
-	void * retVal = fn(data);
+	void *retVal = fn(data);
 
 	//printf("__lwt_start end\n");
 	//printf("__lwt_start: retval %d \n", retVal);
 
 	lwt_die(retVal);
-
-
 
 	lwt_yield(LWT_NULL);
 }
@@ -375,10 +332,11 @@ lwt_info(lwt_info_t t)
         		return -1;
 	}	
 }
-lwt_tcb *
+
+lwt_t
 __get_thread(lwt_t lwt)
 {
-	return tcb[lwt];
+	return lwt;
 }
 
 
