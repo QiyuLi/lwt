@@ -7,9 +7,20 @@
 #include <lwt.h>
 
 
+//Performance test
+
 #define rdtscll(val) __asm__ __volatile__("rdtsc" : "=A" (val))
 
 volatile unsigned long long startx, endx;
+
+//rdtscll(startx);
+	
+//rdtscll(endx);
+
+//printf("Overhead of lwt_schedule is %lld \n", (endx-startx));
+
+
+
 
 /* Global Variables */
 
@@ -45,9 +56,7 @@ __queue_remove(lwt_tcb *thd)
 	else
 		queue_tail = thd->prev;
 
-
 	thd->next = thd->prev = NULL;
-
 
 	return 0;
 }
@@ -184,7 +193,6 @@ lwt_create(lwt_fn_t fn, void *data)
 	__queue_add(tcb[temp]);
 
 	return temp;
-
 }
 
 int 
@@ -218,7 +226,6 @@ lwt_join(lwt_t lwt)
 		__lwt_schedule(thd);
 	}
 
-
 	thd->status = LWT_INFO_NTHD_FINISHED;
 
 	counter--;
@@ -242,7 +249,6 @@ lwt_die(void *val)
 			temp->status = LWT_INFO_NTHD_RUNNABLE;
 			temp->join_thd = NULL;
 		}
-
 
 	lwt_yield(LWT_NULL);
 	
@@ -283,13 +289,6 @@ __lwt_schedule(lwt_tcb *next)
 		__lwt_dispatch(next, curr);
 	}
 
-//rdtscll(startx);
-	
-//rdtscll(endx);
-
-//printf("Overhead of lwt_schedule is %lld \n", (endx-startx));
-
-
 }
 
 void 
@@ -306,15 +305,13 @@ __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
    	"mov    0xc(%eax),%ebp\n"
 	"ret\n"
 	"1:popa\n" 			
-                	   );	
-	
+                	   );
 }
 
 
 void 
 __lwt_initial(lwt_tcb *next, lwt_tcb *curr) 
 {
-
 	__asm__ __volatile__(
 	"pusha\n" 	
 	"push   $2f\n" 

@@ -1,7 +1,7 @@
 #ifndef LWT_H
 #define LWT_H
 
-#define MAX_THREAD_SIZE    32 
+#define MAX_THREAD_SIZE    512 
 #define DEFAULT_STACK_SIZE 0x2000 // 16KB
 
 
