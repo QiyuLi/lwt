@@ -216,13 +216,15 @@ struct multisend_arg {
 void *
 fn_snder(void *arg)
 {
+
+/*
 	struct multisend_arg *a = arg;
 	lwt_chan_t c = a->c;
 	int v = a->snd_val;
 
 	lwt_snd(c, (void*)v);
 	lwt_snd(c, (void*)v);
-
+*/
 	return NULL;
 
 }
@@ -259,13 +261,43 @@ test_multisend(void)
 	return;
 }
 
+
+
+
+void testThread()
+{
+	lwt_t chd1 = lwt_create(fn_snder,NULL);
+	lwt_t chd2 = lwt_create(fn_snder,NULL);
+	
+	__queue_print(-1);
+/*
+	lwt_yield(LWT_NULL);
+	lwt_yield(LWT_NULL);
+
+	__queue_print(-1);
+
+
+
+	__queue_print(-1);
+*/
+
+	lwt_join(chd1);
+
+	__queue_print(-1);
+
+	lwt_join(chd2);
+
+	__queue_print(-1);
+}
+
 int
 main(void)
 {
-	test_perf();
-	test_crt_join_sched();
-	test_perf_channels();
-	test_multisend();
+	//test_perf();
+	//test_crt_join_sched();
+	//test_perf_channels();
+	//test_multisend();
 
-	return 0;
+	testThread();
+	printf("main done\n");
 }

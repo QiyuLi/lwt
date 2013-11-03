@@ -267,5 +267,6 @@ main(void)
 	test_perf_channels();
 	test_multisend();
 
+	printf("main done\n");
 	return 0;
 }

@@ -5,7 +5,7 @@
 #include <DList.h>
 
 typedef struct lwt_channel {
-	int ref_cnt;
+	int snd_cnt;
 	int snd_data_size;
 	void *snd_data;
 	DList *snd_list;
