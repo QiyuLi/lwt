@@ -120,7 +120,10 @@ lwt_info(lwt_info_t t)
 lwt_t 
 lwt_current(void)
 {
-        return curr_thd->tid;
+	if(curr_thd)
+        	return curr_thd->tid;
+	else
+		return 0;
 }
 
 int 
