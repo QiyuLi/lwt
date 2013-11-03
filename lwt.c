@@ -4,8 +4,9 @@
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>
-#include <lwt.h>
 
+#include <lwt.h>
+#include <DList.h>
 
 //Performance test
 
@@ -20,97 +21,21 @@ volatile unsigned long long startx, endx;
 //printf("Overhead of lwt_schedule is %lld \n", (endx-startx));
 
 
-
-
 /* Global Variables */
 
-int counter = 0;
+int thd_count = 0;
 
 lwt_tcb *tcb[MAX_THREAD_SIZE];
+
 void *tcb_index;
 void *stack_index;
 
-lwt_tcb *
-__get_tcb(lwt_t lwt)
-{
-	return tcb[lwt];
-}
+
+dl_list *run_queue;
+dl_list *wait_queue;
 
 lwt_tcb *curr_thd;
-lwt_tcb *queue_head = NULL;
-lwt_tcb *queue_tail = NULL;
 
-
-/* run queue functions */
-
-int 
-__queue_remove(lwt_tcb *thd)
-{
-	if(!thd)
-		return -1;
-
-	thd->prev->next = thd->next;
-
-	if(thd->next)
-		thd->next->prev = thd->prev;
-	else
-		queue_tail = thd->prev;
-
-	thd->next = thd->prev = NULL;
-
-	return 0;
-}
-
-int 
-__queue_add(lwt_tcb *thd)
-{
-	if(!thd)
-		return -1;
-	
-	if(queue_tail != queue_head){
-	    	queue_tail->next = thd;
-		thd->prev = queue_tail;	
-	}
-	else{
-	    	queue_head->next = thd; 
-		thd->prev = queue_head;
-	}
-
-	queue_tail = thd;
-
-	return 0;
-}
-
-void 
-__queue_print(int i)
-{	
-	lwt_tcb *temp; 
-
-	
-	lwt_tcb *prev = curr_thd;
-
-	if(i>-1){
-		curr_thd = tcb[i];
-
-		__queue_remove(tcb[i]);
-		__queue_add(prev);
-	}
-
-	if(curr_thd)
-	   	printf("curr %d \n",curr_thd->tid);
-
-	for(temp = queue_head->next; temp; temp = temp->next){   
-	    	printf("%d ",temp->tid);
-	}
-
-	printf("\n");
-	
-	for(temp = queue_tail; temp != queue_head; temp = temp->prev){   
-	    	printf("%d ",temp->tid);
-	}
-
-	printf("\n");
-}
 
 /* lwt functions */
 
@@ -130,43 +55,30 @@ lwt_t
 lwt_current(void)
 {
 	if(curr_thd)
-        	return curr_thd->tid;
-	else
-		return 0;
+        	return curr_thd;
+	else{
+		__lwt_initialize();	
+		return curr_thd;
+	}
 }
 
 int 
 lwt_id(lwt_t lwt)
 {
-        return lwt;
+        return lwt->tid;
 }
 
 lwt_t 
-lwt_create(lwt_fn_t fn, void *data)
+lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag)
 {
 
-	if(counter == MAX_THREAD_SIZE)
-		return -1;
+	if(thd_count == MAX_THREAD_SIZE)
+		return NULL;
 
-	int temp = counter;
+	int temp = thd_count;
 
 	if(!temp){
-		tcb_index   = malloc(sizeof(lwt_tcb) * MAX_THREAD_SIZE);
-		stack_index = malloc(DEFAULT_STACK_SIZE * MAX_THREAD_SIZE);
-		queue_head  = queue_tail = malloc(sizeof(lwt_tcb));
-		
-		memset(tcb_index, 0, sizeof(tcb_index));
-		memset(stack_index, 0, sizeof(stack_index));
-
-		tcb[temp]         = tcb_index;
-		tcb[temp]->tid    = temp;
-		tcb[temp]->status = LWT_INFO_NTHD_RUNNABLE;
-		
-		curr_thd = tcb[temp];
-		
-		counter++;
-
-		//printf("lwt create: add main %x\n",tcb[temp]->status);
+		__lwt_initialize();
 	}
 
 	for(temp = 1; temp < MAX_THREAD_SIZE; temp++)
@@ -180,30 +92,32 @@ lwt_create(lwt_fn_t fn, void *data)
 		tcb[temp]->stack  = stack_index + DEFAULT_STACK_SIZE * temp;
 	}
 
-	tcb[temp]->tid    = temp;
-	tcb[temp]->status = LWT_INFO_NTHD_NEW;	
-	tcb[temp]->bp     = tcb[temp]->stack + DEFAULT_STACK_SIZE - 0x4 ;
-	tcb[temp]->fn     = fn;
-	tcb[temp]->data   = data;
-	tcb[temp]->next   = NULL;
-	tcb[temp]->prev   = NULL;
-	tcb[temp]->join_thd = NULL;
-	counter++;
+	tcb[temp]->tid      = temp;
+	tcb[temp]->status   = LWT_INFO_NTHD_NEW;	
+	tcb[temp]->bp       = tcb[temp]->stack + DEFAULT_STACK_SIZE - 0x4 ;
+	tcb[temp]->fn       = fn;
+	tcb[temp]->data     = data;
+	tcb[temp]->joinable = flag;
+	tcb[temp]->parent_thd   = lwt_current();
+	tcb[temp]->self_node = dl_make_node(tcb[temp]);
 
-	__queue_add(tcb[temp]);
+	thd_count++;
 
-	return temp;
+	dl_add_node(run_queue, tcb[temp]->self_node);
+
+	return tcb[temp];
 }
 
 int 
 lwt_yield(lwt_t lwt)
 {
-	//printf("lwt_yield \n");
+
+	//printf("lwt_yield %d %d \n",wait_queue->size, run_queue->size);
 
 	if(lwt == LWT_NULL)
 		__lwt_schedule(NULL);
 	else
-		__lwt_schedule(tcb[lwt]);
+		__lwt_schedule(lwt);
 
 	return 0;
 }
@@ -213,77 +127,130 @@ lwt_yield(lwt_t lwt)
 void *
 lwt_join(lwt_t lwt)
 {		
-	lwt_tcb *thd = tcb[lwt];
+	//lwt_tcb *curr = curr_thd;
 
-	lwt_tcb *curr = curr_thd;
+	if(!lwt || lwt->joinable == LWT_NOJOIN || lwt->parent_thd != curr_thd)
+		return NULL;
 
-	if(thd->status == LWT_INFO_NTHD_RUNNABLE || thd->status == LWT_INFO_NTHD_NEW ){
+	if(lwt->status == LWT_INFO_NTHD_RUNNABLE || lwt->status == LWT_INFO_NTHD_NEW ){
 
-		curr->join_thd = thd;
+		lwt_block(curr_thd);
+		
+		//printf("lwt_join %d %d \n",wait_queue->size, run_queue->size);
 
-		curr->status = LWT_INFO_NTHD_BLOCKED;
-
-		__lwt_schedule(thd);
+		__lwt_schedule(lwt);
 	}
 
-	thd->status = LWT_INFO_NTHD_FINISHED;
+	lwt->status = LWT_INFO_NTHD_FINISHED;
 
-	counter--;
-	
-        return thd->retVal;
+	thd_count--;
+
+        return lwt->retVal;
 }
 
 void 
 lwt_die(void *val)
-{
-	curr_thd->status = LWT_INFO_NTHD_ZOMBIES;
-
-	curr_thd->retVal = val;	
-
+{	
 	//printf("lwt_die\n");
 
-	lwt_tcb *temp;
+	if(curr_thd->joinable == LWT_JOIN){
+		
+		curr_thd->status = LWT_INFO_NTHD_ZOMBIES;
 
-	for(temp =  queue_head->next; temp; temp = temp->next)
-		if(temp->join_thd == curr_thd){
-			temp->status = LWT_INFO_NTHD_RUNNABLE;
-			temp->join_thd = NULL;
-		}
+		curr_thd->retVal = val;	
+		
+		lwt_unblock(curr_thd->parent_thd);
 
-	lwt_yield(LWT_NULL);
+		lwt_yield(curr_thd->parent_thd);
+	}else{
+		curr_thd->status = LWT_INFO_NTHD_FINISHED;
+
+		thd_count--;
+	}	
 	
+}
+
+int 
+lwt_block(lwt_t lwt)
+{
+	if(lwt->status == LWT_INFO_NTHD_BLOCKED)
+		return 0;
+
+	lwt->status = LWT_INFO_NTHD_BLOCKED;
+
+	dl_remove_node(run_queue,lwt->self_node);
+
+	dl_add_node(wait_queue,lwt->self_node);
+
+	return 0;
+}
+
+int 
+lwt_unblock(lwt_t lwt)
+{
+	if(lwt->status == LWT_INFO_NTHD_RUNNABLE)
+		return 0;
+
+	lwt->status = LWT_INFO_NTHD_RUNNABLE;
+
+	dl_remove_node(wait_queue,lwt->self_node);
+
+	dl_add_node(run_queue,lwt->self_node);
+
+	return 0;
 }
 
 /* private lwt functions */
 
+void
+__lwt_initialize(void)
+{
+	//printf("lwt initialize: add main %x\n",tcb[temp]->status);
+
+	int temp = thd_count;
+
+	run_queue = dl_init_list();
+	wait_queue =  dl_init_list();
+	
+	tcb_index   = malloc(sizeof(lwt_tcb) * MAX_THREAD_SIZE);
+	stack_index = malloc(DEFAULT_STACK_SIZE * MAX_THREAD_SIZE);	
+	memset(tcb_index, 0, sizeof(tcb_index));
+	memset(stack_index, 0, sizeof(stack_index));
+
+	tcb[temp]         = tcb_index;
+	tcb[temp]->tid    = temp;
+	tcb[temp]->status = LWT_INFO_NTHD_RUNNABLE;
+	tcb[temp]->self_node = dl_make_node(tcb[temp]);
+
+	curr_thd = tcb[temp];
+
+	thd_count++;
+}
 
 void 
 __lwt_schedule(lwt_tcb *next)
-{
-	//printf("lwt schedule \n");
+{	
+	if(!run_queue || !run_queue->size)
+		return;
 
-	if(!next){	
-		for(next = queue_head->next; next; next = next->next)
-			if(next->status == LWT_INFO_NTHD_NEW || 
-			   next->status == LWT_INFO_NTHD_RUNNABLE  )
-				break;
+	if(curr_thd->status == LWT_INFO_NTHD_RUNNABLE)
+		dl_add_node(run_queue, curr_thd->self_node);
 
-		if(!next)
-			return;
-	}
+	if(!next)
+		next = run_queue->head->next->data;
+
+	dl_remove_node(run_queue,next->self_node);
 
 	lwt_tcb *curr = curr_thd;
-
-	if(curr->status != LWT_INFO_NTHD_ZOMBIES)
-		__queue_add(curr);
-
-	__queue_remove(next);
-	
 	curr_thd = next;
+
+	//printf("lwt schedule, curr %d next %d \n",curr->tid,next->tid);
+	//printf("%d %d \n",wait_queue->size, run_queue->size);
+	//PrintDList(run_queue);
 
 	if(next->status == LWT_INFO_NTHD_NEW){
 		next->status = LWT_INFO_NTHD_RUNNABLE;
-	    	__lwt_initial(next, curr);
+	    	__lwt_dispatch_new(next, curr);
 	}
 	else{
 		__lwt_dispatch(next, curr);
@@ -310,7 +277,7 @@ __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
 
 
 void 
-__lwt_initial(lwt_tcb *next, lwt_tcb *curr) 
+__lwt_dispatch_new(lwt_tcb *next, lwt_tcb *curr) 
 {
 	__asm__ __volatile__(
 	"pusha\n" 	
@@ -340,12 +307,14 @@ __lwt_start(lwt_fn_t fn, void * data)
 	lwt_die(retVal);	
 }
 
-
-
-lwt_tcb *
-__get_thread(lwt_t lwt)
+dl_list *
+__get_run_queue()
 {
-	return tcb[lwt];
+	return run_queue;
 }
 
-
+dl_list *
+__get_wait_queue()
+{
+	return wait_queue;
+}

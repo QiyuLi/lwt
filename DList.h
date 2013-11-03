@@ -1,34 +1,52 @@
 #ifndef DList_H
 #define DList_H
 
-typedef struct Node
+typedef struct dl_node
 {
 	void *data;
-	struct Node *prev;
-	struct Node *next;
-} Node;
+	struct dl_node *prev;
+	struct dl_node *next;
+} dl_node;
 
-typedef struct DList
+typedef struct dl_list
 {
-	Node *head;
-	Node *tail;
+	dl_node *head;
+	dl_node *tail;
 	int size
-} DList;
+} dl_list;
 
 
+dl_node *
+dl_make_node(void *data);
 
-Node *
-MakeNode(void *data);
-
-DList *
-InitDList(void);
+dl_list *
+dl_init_list(void);
 
 void 
-DestroyDList(DList *dlist);
-
+dl_destroy_list(dl_list *list);
 
 void
-ClearDList(DList *dlist);
+dl_clear_list(dl_list *list);
+
+int 
+dl_remove_node(dl_list *list, dl_node *node);
+
+int 
+dl_add_node(dl_list *list, dl_node *node);
+
+dl_node *
+dl_get_node(dl_list *list);
+
+int 
+dl_empty(dl_list *list);
+
+void
+dl_print_list(dl_list *list);
+
+dl_node *
+dl_find_node(dl_list *list, void *data);
+
+/*
 
 Node *
 GetHead(DList *dlist);
@@ -36,19 +54,11 @@ GetHead(DList *dlist);
 Node *
 GetTail(DList *dlist);
 
-int 
-RemoveNode(DList *dlist, Node *node);
 
-int 
-AddNode(DList *dlist, Node *node);
 
-Node *
-GetNode(DList *dlist);
 
-Node *
-FindNode(DList *dlist, void *data);
 
-void
-PrintDList(DList *dlist);
+*/
+
 
 #endif

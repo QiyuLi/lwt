@@ -1,5 +1,5 @@
 BIN=main
-OBJS=main.o lwt_tramp.o lwt.o lwtchan.o DList.o
+OBJS=main.o lwt_tramp.o lwt.o lwtchan.o DList.o RingBuffer.o
 CC=gcc
 #CFLAGS=-ggdb3 -I. -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
 CFLAGS=-O3 -ggdb3 -I. -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable

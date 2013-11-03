@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+
 #include <DList.h>
 
 
-Node *
-MakeNode(void *data)
+dl_node *
+dl_make_node(void *data)
 {
-	Node *n = malloc(sizeof(Node));
+	dl_node *n = malloc(sizeof(dl_node));
 	
 	n->data = data;
 	n->next = n->prev = NULL;
@@ -14,60 +15,49 @@ MakeNode(void *data)
 	return n;
 }
 
-DList *
-InitDList()
+dl_list *
+dl_init_list()
 {
-	DList *dlist = malloc(sizeof(DList));	
+	dl_list *list = malloc(sizeof(dl_list));	
 	
-	dlist->head = dlist->tail = MakeNode(NULL);
+	list->head = list->tail = dl_make_node(NULL);
 
-	dlist->size = 0;
+	list->size = 0;
 
-	return dlist;
+	return list;
 }
 
 void 
-DestroyDList(DList *dlist)
+dl_destroy_list(dl_list *list)
 {
-	ClearDList(dlist);
+	dl_clear_list(list);
 
-	free(dlist->head);
+	free(list->head);
 
-	free(dlist);
+	free(list);
 }
 
 void
-ClearDList(DList *dlist)
+dl_clear_list(dl_list *list)
 {
-	Node *n = dlist->tail;
-	Node *temp;
+	dl_node *n = list->tail;
+	dl_node *temp;
 
-	while(dlist->size > 0){	
+	while(list->size > 0){	
 		temp = n;
 		n = n->prev;
 		free(temp);
-		dlist->size--;
+		list->size--;
 	}
 	
-	dlist->tail = dlist->head;
+	list->tail = list->head;
 }
 
-Node *
-GetHead(DList *dlist)
-{
-	return dlist->head;
-}
-
-Node *
-GetTail(DList *dlist)
-{
-	return dlist->tail;
-}
 
 int 
-RemoveNode(DList *dlist, Node *node)
+dl_remove_node(dl_list *list, dl_node *node)
 {
-	if(!dlist || !node || !node->prev)
+	if(!list || !node || !node->prev)
 		return -1;
 	
 	node->prev->next = node->next;
@@ -75,60 +65,87 @@ RemoveNode(DList *dlist, Node *node)
 	if(node->next)
 		node->next->prev = node->prev;
 	else
-		dlist->tail = node->prev;
+		list->tail = node->prev;
 
 	node->next = node->prev = NULL;
 
-	dlist->size--;
-	
+	list->size--;
+
 	return 0;
 }
 
 int 
-AddNode(DList *dlist, Node *node)
+dl_add_node(dl_list *list, dl_node *node)
 {
-	if(!dlist || !node)
+	if(!list || !node)
 		return -1;
 	
-	if(dlist->tail != dlist->head){
-	    	dlist->tail->next = node;
-		node->prev = dlist->tail;	
+	if(list->tail != list->head){
+	    	list->tail->next = node;
+		node->prev = list->tail;	
 	}
 	else{
-	    	dlist->head->next = node; 
-		node->prev = dlist->head;
+	    	list->head->next = node; 
+		node->prev = list->head;
 	}
 
-	dlist->tail = node;
+	list->tail = node;
 
-	dlist->size++;
+	list->size++;
 	
 	return 0;
 
 }
 
-Node *
-GetNode(DList *dlist)
+dl_node *
+dl_get_node(dl_list *list)
 {
-	if(!dlist)
+	if(!list)
 		return NULL;
 
-	Node *temp = dlist->head->next;
+	dl_node *temp = list->head->next;
 
-	RemoveNode(dlist,temp);
+	dl_remove_node(list,temp);
 
 	return temp;
 }
 
-Node *
-FindNode(DList *dlist, void *data)
+int 
+dl_empty(dl_list *list)
 {
-	if(!dlist || !data)
+	return list->size == 0;
+}
+
+void
+dl_print_list(dl_list *list)
+{
+	printf("Print list \n");
+	if(!list)
+		return;
+
+	dl_node *n;
+
+	for(n = list->head->next; n; n = n->next)
+		printf("%x ",n->data);
+
+	printf("\n");
+
+	for(n = list->tail; n != list->head; n = n->prev)
+		printf("%x ",n->data);
+
+	printf("\nsize: %d\n",list->size);
+	
+}
+
+dl_node *
+dl_find_node(dl_list *list, void *data)
+{
+	if(!list || !data)
 		return NULL;
 
-	Node *n;
+	dl_node *n;
 
-	for(n = dlist->head->next; n; n = n->next)
+	for(n = list->head->next; n; n = n->next)
 		if(n->data == data)
 			return n;
 
@@ -136,25 +153,24 @@ FindNode(DList *dlist, void *data)
 
 }
 
-void
-PrintDList(DList *dlist)
+/*
+
+dl_node *
+GetHead(list *list)
 {
-	printf("Print DList \n");
-	if(!dlist)
-		return;
-
-	Node *n;
-
-	for(n = dlist->head->next; n; n = n->next)
-		printf("%x ",n->data);
-
-	printf("\n");
-
-	for(n = dlist->tail; n != dlist->head; n = n->prev)
-		printf("%x ",n->data);
-
-	printf("\nsize: %d\n",dlist->size);
-	
+	return list->head;
 }
 
+dl_node *
+GetTail(list *list)
+{
+	return list->tail;
+}
+
+
+
+
+
+
+*/
 
