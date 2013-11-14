@@ -40,15 +40,13 @@ typedef struct lwt_tcb {
 	lwt_fn_t fn;
 	void *data;
 	void *retVal;			
-	struct lwt_tcb *parent_thd; 
+        struct lwt_tcb *parent_thd; 
 	lwt_flags_t joinable;
 	void *self_node;
 	
 } lwt_tcb; 
 
-
 typedef lwt_tcb *lwt_t;
-
 
 typedef struct lwt_thd_group {
 
@@ -85,10 +83,10 @@ lwt_id(lwt_t lwt);
 int 
 lwt_info(lwt_info_t t);
 
-int 
+void 
 lwt_block(lwt_t lwt);
 
-int 
+void 
 lwt_unblock(lwt_t lwt);
 
 

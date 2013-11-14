@@ -31,6 +31,8 @@ rb_add_data(rb_array *array, void *data)
 	array->add_index = ( ++ array->add_index) % array->size;
 	
 	array->count++;
+
+	return 0;
 }
 
 void *

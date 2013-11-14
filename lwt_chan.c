@@ -51,20 +51,25 @@ lwt_snd(lwt_chan_t c, void *data)
 
 			rb_add_data(c->snd_data, data);
 	
-			//printf("thd id %d, lwt_snd done %x \n",lwt_current()->tid, data);
-			
-			__lwt_chan_event(c->group,c);
+			lwt_unblock(c->rcv_thd);
 
+			__lwt_chan_snd_event(c->group,c);
+
+			//printf("thd id %d, lwt_snd done %x \n",lwt_current()->tid, data);
 			return 0;
 		}
 		
-		dl_node *n = dl_make_node(lwt_current());
+		lwt_t curr = lwt_current();
+
+		dl_node *n = dl_make_node(curr);
 
 		dl_add_node(c->snd_list,n);
 
-		//printf("thd id %d, lwt_snd blocked, yield to thd id %d \n",lwt_current()->tid, c->rcv_thd->tid);
+		lwt_block(curr);	
 
-		lwt_yield(c->rcv_thd);	
+		//printf("thd id %d, lwt_snd blocked, yield to thd id %d \n",lwt_current()->tid, c->rcv_thd->tid);	
+
+		lwt_yield(LWT_NULL);	
 	}
 	
 }
@@ -84,22 +89,23 @@ lwt_rcv(lwt_chan_t c)
 		
 			//printf("thd id %d, lwt_rcv done %x \n",lwt_current()->tid, data);
 
-			__lwt_chan_event(c->group,c);
+			__lwt_chan_rcv_event(c->group,c);
 
 			return data;
 		}
 
-		if(!dl_empty(c->snd_list)){		
-			dl_node *n = dl_get_node(c->snd_list);
+		if(!dl_empty(c->snd_list)){	
+	
+			dl_node *n = dl_get_node(c->snd_list);		
 
-			//printf("thd id %d, lwt_rcv yield to thd id %d \n",lwt_current()->tid, ((lwt_t)n->data)->tid);
+			lwt_unblock(n->data);	
+			//printf("thd id %d, lwt_rcv unblock thd id %d \n",lwt_current()->tid, ((lwt_t)n->data)->tid);
+		}
 
-			lwt_yield(n->data);	
-		}else{
-			//printf("thd id %d, lwt_rcv blocked\n",lwt_current()->tid);
-
-			lwt_yield(LWT_NULL);
-		}																																																																												
+		//printf("thd id %d, lwt_rcv blocked\n",lwt_current()->tid);
+		lwt_block(c->rcv_thd);
+		lwt_yield(LWT_NULL);
+																																																																														
 	}
 }
 
@@ -121,6 +127,18 @@ lwt_rcv_chan(lwt_chan_t c)
 	cc->ref_cnt++;
 
 	return cc;
+}
+
+void 
+lwt_chan_mark_set(lwt_chan_t c, void *data)
+{
+	c->mark_data = data;
+}
+
+void *
+lwt_chan_mark_get(lwt_chan_t c)
+{
+	return c->mark_data;
 }
 
 void
@@ -146,9 +164,10 @@ lwt_cgrp(void)
 {
 	lwt_cgrp_t cg = malloc(sizeof(lwt_chan_grp));
 
+	cg->snd_list = dl_init_list();
+	cg->rcv_list = dl_init_list();
 	cg->ready_list = dl_init_list();
-
-	cg->wait_list = dl_init_list();
+	cg->owner = lwt_current();
 
 	return cg;
 }
@@ -159,8 +178,9 @@ lwt_cgrp_free(lwt_cgrp_t cg)
 	if(!dl_empty(cg->ready_list))
 		return 1;
 
+	dl_destroy_list(cg->rcv_list);
+	dl_destroy_list(cg->snd_list);
 	dl_destroy_list(cg->ready_list);
-	dl_destroy_list(cg->wait_list);
 
 	free(cg);
 
@@ -175,7 +195,10 @@ lwt_cgrp_add(lwt_cgrp_t cg, lwt_chan_t c)
 
 	dl_node *n = dl_make_node(c);
 
-	dl_add_node(cg->wait_list, n);
+	if(c->rcv_thd == lwt_current())
+		dl_add_node(cg->rcv_list, n);
+	else
+		dl_add_node(cg->snd_list, n);
 
 	c->group = cg;
 
@@ -191,7 +214,11 @@ lwt_cgrp_rem(lwt_cgrp_t cg, lwt_chan_t c)
 	dl_node *n = dl_find_node(cg->ready_list,c);
 
 	if(!n){
-		dl_remove_node(cg->wait_list, n);
+
+		if(c->rcv_thd == lwt_current())
+			dl_remove_node(cg->rcv_list, n);
+		else
+			dl_remove_node(cg->snd_list, n);
 
 		c->group = NULL;
 
@@ -200,34 +227,45 @@ lwt_cgrp_rem(lwt_cgrp_t cg, lwt_chan_t c)
 		return 1;
 }
 
-lwt_chan_t lwt_cgrp_wait(lwt_cgrp_t cg)
+lwt_chan_t 
+lwt_cgrp_wait(lwt_cgrp_t cg)
 {
-	while(dl_empty(cg->ready_list))
+	while(dl_empty(cg->ready_list)){
+		lwt_block(cg->owner);
 		lwt_yield(LWT_NULL);
+	}
 
 	return dl_get_node(cg->ready_list)->data;
 }
 
-void 
-lwt_chan_mark_set(lwt_cgrp_t cg, void *data)
-{
-	cg->mark_data = data;
-}
 
-void *
-lwt_chan_mark_get(lwt_cgrp_t cg)
-{
-	return cg->mark_data;
-}
 
 void 
-__lwt_chan_event(lwt_cgrp_t cg, lwt_chan_t c)
+__lwt_chan_snd_event(lwt_cgrp_t cg, lwt_chan_t c)
 {
 	if(!cg || !c)
 		return;
 
-	dl_node *n = dl_make_node(c);
+	dl_node *n = dl_find_node(cg->rcv_list,c);
 
-	dl_add_node(cg->ready_list, n);
+	if(n){
+		n = dl_make_node(c);
+		dl_add_node(cg->ready_list, n);
+		lwt_unblock(cg->owner);
+	}
 }
 
+void 
+__lwt_chan_rcv_event(lwt_cgrp_t cg, lwt_chan_t c)
+{
+	if(!cg || !c)
+		return;
+
+	dl_node *n = dl_find_node(cg->snd_list,c);
+
+	if(n){
+		n = dl_make_node(c);
+		dl_add_node(cg->ready_list, n);
+		lwt_unblock(cg->owner);
+	}
+}

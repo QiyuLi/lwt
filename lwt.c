@@ -169,34 +169,30 @@ lwt_die(void *val)
 	
 }
 
-int 
+void 
 lwt_block(lwt_t lwt)
 {
 	if(lwt->status == LWT_INFO_NTHD_BLOCKED)
-		return 0;
+		return;
 
 	lwt->status = LWT_INFO_NTHD_BLOCKED;
 
 	dl_remove_node(run_queue,lwt->self_node);
 
 	dl_add_node(wait_queue,lwt->self_node);
-
-	return 0;
 }
 
-int 
+void 
 lwt_unblock(lwt_t lwt)
 {
 	if(lwt->status == LWT_INFO_NTHD_RUNNABLE)
-		return 0;
+		return;
 
 	lwt->status = LWT_INFO_NTHD_RUNNABLE;
 
 	dl_remove_node(wait_queue,lwt->self_node);
 
 	dl_add_node(run_queue,lwt->self_node);
-
-	return 0;
 }
 
 /* private lwt functions */
