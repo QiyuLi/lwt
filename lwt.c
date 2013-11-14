@@ -6,7 +6,10 @@
 #include <string.h>
 
 #include <lwt.h>
+
 #include <d_linked_list.h>
+
+#include <queue.h>
 
 //Performance test
 
@@ -137,7 +140,7 @@ lwt_join(lwt_t lwt)
 		
 		//printf("lwt_join %d %d \n",wait_queue->size, run_queue->size);
 
-		lwt_yield(lwt);
+		lwt_yield(LWT_NULL);
 	}
 
 	lwt->status = LWT_INFO_NTHD_FINISHED;
@@ -160,7 +163,7 @@ lwt_die(void *val)
 		
 		lwt_unblock(curr_thd->parent_thd);
 
-		lwt_yield(curr_thd->parent_thd);
+		lwt_yield(LWT_NULL);
 	}else{
 		curr_thd->status = LWT_INFO_NTHD_FINISHED;
 
