@@ -3,12 +3,12 @@
 #include <assert.h>
 
 #include <lwt.h>
-#include <lwtchan.h>
-#include <DList.h>
+#include <lwt_chan.h>
+#include <d_linked_list.h>
 
 #define rdtscll(val) __asm__ __volatile__("rdtsc" : "=A" (val))
 
-#define ITER 5
+#define ITER 10000
 
 /* 
  * My performance on an Intel Core i5-2520M CPU @ 2.50GHz:
@@ -271,8 +271,8 @@ void *fn_my(void *data)
 int
 main(void)
 {
-	//test_perf();	
-	//test_crt_join_sched();
+	test_perf();	
+	test_crt_join_sched();
 	test_perf_channels();
 	test_multisend();
 

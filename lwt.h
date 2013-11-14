@@ -1,7 +1,7 @@
 #ifndef LWT_H
 #define LWT_H
 
-#include <DList.h>
+#include <d_linked_list.h>
 
 #define MAX_THREAD_SIZE    512 
 #define DEFAULT_STACK_SIZE 0x2000 // 16KB
@@ -36,19 +36,32 @@ typedef struct lwt_tcb {
 	void *stack;
 	void *bp; 			//base pointer of stack
 	void *sp;			//top pointer of satck
-	//void *ip;                       //pointer of next instruction
-	int group_id;
+	void *group;	
 	lwt_fn_t fn;
 	void *data;
 	void *retVal;			
 	struct lwt_tcb *parent_thd; 
 	lwt_flags_t joinable;
 	void *self_node;
+	
 } lwt_tcb; 
 
 
 typedef lwt_tcb *lwt_t;
 
+
+typedef struct lwt_thd_group {
+
+	dl_list *thd_list;
+	dl_list *run_queue;
+	dl_list *wait_queue;
+
+	lwt_tcb *curr_thd;	
+
+} lwt_thd_group;
+
+
+typedef lwt_thd_group *lwt_tgrp_t;
 
 /* lwt functions */
 lwt_t 
@@ -79,10 +92,21 @@ int
 lwt_unblock(lwt_t lwt);
 
 
+// lwt thd group functions
+
+lwt_tgrp_t
+lwt_tgrp();
+
+int
+lwt_tgrp_add(lwt_tgrp_t tg, lwt_t lwt);
+
+int
+lwt_tgrp_rem(lwt_tgrp_t tg, lwt_t lwt);
+
 /* private lwt functions */
 
 void 
-__lwt_schedule(lwt_tcb *next);	
+__lwt_schedule(dl_list *run_queue, lwt_tcb *next);	
 
 void 
 __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr) __attribute__ ((noinline));

@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include <lwt.h>
-#include <DList.h>
+#include <d_linked_list.h>
 
 //Performance test
 
@@ -100,7 +100,7 @@ lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag)
 	tcb[temp]->joinable = flag;
 	tcb[temp]->parent_thd   = lwt_current();
 	tcb[temp]->self_node = dl_make_node(tcb[temp]);
-
+	tcb[temp]->group    = NULL;
 	thd_count++;
 
 	dl_add_node(run_queue, tcb[temp]->self_node);
@@ -111,13 +111,12 @@ lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag)
 int 
 lwt_yield(lwt_t lwt)
 {
-
 	//printf("lwt_yield %d %d \n",wait_queue->size, run_queue->size);
 
 	if(lwt == LWT_NULL)
-		__lwt_schedule(NULL);
+		__lwt_schedule(run_queue, NULL);
 	else
-		__lwt_schedule(lwt);
+		__lwt_schedule(run_queue, lwt);
 
 	return 0;
 }
@@ -138,7 +137,7 @@ lwt_join(lwt_t lwt)
 		
 		//printf("lwt_join %d %d \n",wait_queue->size, run_queue->size);
 
-		__lwt_schedule(lwt);
+		lwt_yield(lwt);
 	}
 
 	lwt->status = LWT_INFO_NTHD_FINISHED;
@@ -221,6 +220,7 @@ __lwt_initialize(void)
 	tcb[temp]->tid    = temp;
 	tcb[temp]->status = LWT_INFO_NTHD_RUNNABLE;
 	tcb[temp]->self_node = dl_make_node(tcb[temp]);
+	tcb[temp]->group    = NULL;
 
 	curr_thd = tcb[temp];
 
@@ -228,7 +228,7 @@ __lwt_initialize(void)
 }
 
 void 
-__lwt_schedule(lwt_tcb *next)
+__lwt_schedule(dl_list *run_queue, lwt_tcb *next)
 {	
 	if(!run_queue || !run_queue->size)
 		return;
