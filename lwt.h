@@ -1,7 +1,7 @@
 #ifndef LWT_H
 #define LWT_H
 
-#include <d_linked_list.h>
+//#include <d_linked_list.h>
 
 #include <queue.h>
 
@@ -23,6 +23,8 @@
 #define LWT_NOJOIN 1
 #define LWT_JOIN 0
 
+#define LWT_RUNNING 0x2
+
 
 
 typedef int lwt_tid;
@@ -35,7 +37,7 @@ typedef void *(*lwt_fn_t)(void *);
 
 typedef struct lwt_tcb {
         int tid;
-        int status;
+        int state;
 	void *stack;
 	void *bp; 			//base pointer of stack
 	void *sp;			//top pointer of satck
@@ -53,9 +55,8 @@ typedef lwt_tcb *lwt_t;
 
 typedef struct lwt_thd_group {
 
-	dl_list *thd_list;
-	dl_list *run_queue;
-	dl_list *wait_queue;
+	queue *run_queue;
+	queue *wait_queue;
 
 	lwt_tcb *curr_thd;	
 
@@ -78,7 +79,7 @@ int
 lwt_yield(lwt_t makelwt);	
 
 lwt_t 
-lwt_current(void);	
+lwt_current();	
 
 int 
 lwt_id(lwt_t lwt);		
@@ -107,7 +108,7 @@ lwt_tgrp_rem(lwt_tgrp_t tg, lwt_t lwt);
 /* private lwt functions */
 
 void 
-__lwt_schedule(dl_list *run_queue, lwt_tcb *next);	
+__lwt_schedule(queue *run_queue, lwt_tcb *next);	
 
 void 
 __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr) __attribute__ ((noinline));
@@ -125,10 +126,10 @@ void
 __lwt_start(lwt_fn_t fn, void *data);	
 
 
-dl_list *
-__get_run_queue();
+queue *
+__run_queue();
 
-dl_list *
-__get_wait_queue();
+queue *
+__wait_queue();
 
 #endif

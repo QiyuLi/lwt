@@ -21,29 +21,28 @@ queue *
 q_init(void);
 
 void 
-q_destroy(queue *q);
+q_free(queue *q);
 
 void
 q_clear(queue *q);
 
 int 
-q_enqueue(queue *q, void *data);
+q_enqueue(queue *q, q_node *node);
 
-void *
+int 
+q_enqueue_sync(queue *q, q_node *node);
+
+q_node *
 q_dequeue(queue *q);
 
-int 
-q_remove(queue *q, void *data);
-
-
-int 
-q_enqueue_sync(queue *q, void *data);
-
-void *
+q_node *
 q_dequeue_sync(queue *q);
 
 int 
-q_remove_sync(queue *q, void *data);
+q_remove(queue *q, q_node *node);
+
+int 
+q_remove_sync(queue *q, q_node *node);
 
 int 
 q_empty(queue *q);

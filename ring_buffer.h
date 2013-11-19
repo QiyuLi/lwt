@@ -1,34 +1,37 @@
 #ifndef RING_BUFFER_H
 #define RING_BUFFER_H
 
-typedef struct rb_array
+typedef struct ring_buffer
 {
 	int size;
 	void **data;
 	unsigned int get_index;
 	unsigned int add_index;
-} rb_array;
+} ring_buffer;
 
 
-rb_array *
-rb_init_array(int size);
-
-int
-rb_add_data(rb_array *array, void *data);
-
-void *
-rb_get_data(rb_array *array);
+ring_buffer *
+rb_init(int size);
 
 int
-rb_add_data_sync(rb_array *array, void *data);
+rb_free(ring_buffer *rb);
+
+int
+rb_add(ring_buffer *rb, void *data);
+
+int
+rb_add_sync(ring_buffer *rb, void *data);
 
 void *
-rb_get_data_sync(rb_array *array);
+rb_get(ring_buffer *rb);
+
+void *
+rb_get_sync(ring_buffer *rb);
 
 int 
-rb_full(rb_array *array);
+rb_full(ring_buffer *rb);
 
 int 
-rb_empty(rb_array *array);
+rb_empty(ring_buffer *rb);
 
 #endif
