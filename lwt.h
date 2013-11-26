@@ -1,10 +1,7 @@
 #ifndef LWT_H
 #define LWT_H
 
-//#include <d_linked_list.h>
-
 #include <queue.h>
-
 
 #define MAX_THREAD_SIZE    512 
 #define DEFAULT_STACK_SIZE 0x2000 // 16KB
@@ -25,17 +22,21 @@
 
 #define LWT_RUNNING 0x2
 
-
-
 typedef int lwt_tid;
 
 typedef int lwt_info_t;
 
 typedef int lwt_flags_t;
 
-typedef void *(*lwt_fn_t)(void *);
+typedef void *(*lwt_fn_t)(void *, void *);
 
-typedef struct lwt_tcb {
+typedef struct lwt_tcb *lwt_t;
+
+typedef struct lwt_thd_group *lwt_tgrp_t;
+
+struct lwt_channel;
+
+struct lwt_tcb {
         int tid;
         int state;
 	void *stack;
@@ -48,26 +49,25 @@ typedef struct lwt_tcb {
         struct lwt_tcb *parent_thd; 
 	lwt_flags_t joinable;
 	void *self_node;
-	
+	void *chan;
 } lwt_tcb; 
 
-typedef lwt_tcb *lwt_t;
 
-typedef struct lwt_thd_group {
+struct lwt_thd_group {
 
 	queue *run_queue;
 	queue *wait_queue;
 
-	lwt_tcb *curr_thd;	
+	lwt_t curr_thd;	
 
 } lwt_thd_group;
 
 
-typedef lwt_thd_group *lwt_tgrp_t;
+
 
 /* lwt functions */
 lwt_t 
-lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag) ;
+lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag, void *c) ;
 
 void *
 lwt_join(lwt_t lwt);
@@ -108,13 +108,13 @@ lwt_tgrp_rem(lwt_tgrp_t tg, lwt_t lwt);
 /* private lwt functions */
 
 void 
-__lwt_schedule(queue *run_queue, lwt_tcb *next);	
+__lwt_schedule(queue *run_queue, lwt_t next);	
 
 void 
-__lwt_dispatch(lwt_tcb *next, lwt_tcb *curr) __attribute__ ((noinline));
+__lwt_dispatch(lwt_t next, lwt_t curr) __attribute__ ((noinline));
 
 void 
-__lwt_dispatch_new(lwt_tcb *next, lwt_tcb *curr) __attribute__ ((noinline)); 
+__lwt_dispatch_new(lwt_t next, lwt_t curr) __attribute__ ((noinline)); 
 
 extern void 
 __lwt_trampoline(); 

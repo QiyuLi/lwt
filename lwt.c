@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include <lwt.h>
+#include <lwt_chan.h>
 #include <queue.h>
 
 //Performance test
@@ -26,7 +27,7 @@ volatile unsigned long long startx, endx;
 int thd_count = 0;
 int initialized = 0;
 
-lwt_tcb *tcb[MAX_THREAD_SIZE];
+lwt_t tcb[MAX_THREAD_SIZE];
 
 void *tcb_index;
 void *stack_index;
@@ -35,7 +36,7 @@ void *stack_index;
 queue *run_queue;
 queue *wait_queue;
 
-lwt_tcb *curr_thd;
+lwt_t curr_thd;
 
 
 /* lwt functions */
@@ -70,7 +71,7 @@ lwt_id(lwt_t lwt)
 }
 
 lwt_t 
-lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag)
+lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag, void *c)
 {
 	if(!initialized){
 		__lwt_initialize();
@@ -93,7 +94,7 @@ lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag)
 	}
 
 	tcb[temp]->tid      = temp;
-	tcb[temp]->state   = LWT_INFO_NTHD_NEW;	
+	tcb[temp]->state    = LWT_INFO_NTHD_NEW;	
 	tcb[temp]->bp       = tcb[temp]->stack + DEFAULT_STACK_SIZE - 0x4 ;
 	tcb[temp]->fn       = fn;
 	tcb[temp]->data     = data;
@@ -101,6 +102,12 @@ lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag)
 	tcb[temp]->parent_thd   = lwt_current();
 	tcb[temp]->self_node = q_make_node(tcb[temp]);
 	tcb[temp]->group    = NULL;
+
+	if(c)	
+		((lwt_chan_t)c)->rcv_thd = tcb[temp];
+
+	tcb[temp]->chan     = c;
+
 	thd_count++;
 
 	q_enqueue(run_queue, tcb[temp]->self_node);
@@ -250,7 +257,7 @@ __lwt_initialize()
 }
 
 void 
-__lwt_schedule(queue *run_queue, lwt_tcb *next)
+__lwt_schedule(queue *run_queue, lwt_t next)
 {	
 	if(!run_queue || !run_queue->size)
 		return;
@@ -263,7 +270,7 @@ __lwt_schedule(queue *run_queue, lwt_tcb *next)
 	else
 		q_remove(run_queue, next->self_node);
 
-	lwt_tcb *curr = curr_thd;
+	lwt_t curr = curr_thd;
 	curr_thd = next;
 
 	//printf("lwt schedule, curr %d next %d \n",curr->tid,next->tid);
@@ -281,7 +288,7 @@ __lwt_schedule(queue *run_queue, lwt_tcb *next)
 }
 
 void 
-__lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
+__lwt_dispatch(lwt_t next, lwt_t curr)
 {
 	__asm__ __volatile__(
 	"pusha\n"
@@ -299,7 +306,7 @@ __lwt_dispatch(lwt_tcb *next, lwt_tcb *curr)
 
 
 void 
-__lwt_dispatch_new(lwt_tcb *next, lwt_tcb *curr) 
+__lwt_dispatch_new(lwt_t next, lwt_t curr) 
 {
 	__asm__ __volatile__(
 	"pusha\n" 	
@@ -324,7 +331,7 @@ __lwt_dispatch_new(lwt_tcb *next, lwt_tcb *curr)
 void 
 __lwt_start(lwt_fn_t fn, void * data)
 {
-	void * retVal = fn(data);
+	void * retVal = fn(data, curr_thd->chan);
 
 	lwt_die(retVal);	
 }
