@@ -1,10 +1,11 @@
 #ifndef LWT_H
 #define LWT_H
 
-#include <queue.h>
+#include <ring_buffer.h>
+
 
 #define MAX_THREAD_SIZE    512 
-#define DEFAULT_STACK_SIZE 0x2000 // 16KB
+#define DEFAULT_STACK_SIZE 0x2000 //
 
 
 /* Thread Status */
@@ -37,28 +38,46 @@ typedef struct lwt_thd_group *lwt_tgrp_t;
 struct lwt_channel;
 
 struct lwt_tcb {
-        int tid;
-        int state;
-	void *stack;
 	void *bp; 			//base pointer of stack
 	void *sp;			//top pointer of satck
-	void *group;	
+	void *stack;
+
+        int tid;
+        int state;
+	lwt_flags_t joinable;
+
 	lwt_fn_t fn;
 	void *data;
-	void *retVal;			
-        struct lwt_tcb *parent_thd; 
-	lwt_flags_t joinable;
-	void *self_node;
 	void *chan;
+	void *retVal;
+
+	struct lwt_thd_group *group;			
+        struct lwt_tcb *parent_thd; 
+	
+	void *self_node;
+	
+	struct lwt_tcb *rq_next;
+	struct lwt_tcb *rq_prev;
+	struct lwt_tcb *wq_next;
+	struct lwt_tcb *wq_prev;
+
 } lwt_tcb; 
 
 
 struct lwt_thd_group {
 
-	queue *run_queue;
-	queue *wait_queue;
+	int thd_count;
 
-	lwt_t curr_thd;	
+	lwt_t tcb[MAX_THREAD_SIZE];
+
+	void *tcb_index;
+	void *stack_index;
+
+	lwt_t rq_head;
+	lwt_t wq_head;
+	lwt_t curr_thd;
+
+	ring_buffer *req_list;
 
 } lwt_thd_group;
 
@@ -96,6 +115,10 @@ lwt_unblock(lwt_t lwt);
 
 // lwt thd group functions
 
+int 
+lwt_kthd_create(lwt_fn_t fn, void *data, void *c);
+
+
 lwt_tgrp_t
 lwt_tgrp();
 
@@ -105,10 +128,14 @@ lwt_tgrp_add(lwt_tgrp_t tg, lwt_t lwt);
 int
 lwt_tgrp_rem(lwt_tgrp_t tg, lwt_t lwt);
 
+lwt_tgrp_t
+current_tgrp();
+
+
 /* private lwt functions */
 
 void 
-__lwt_schedule(queue *run_queue, lwt_t next);	
+__lwt_schedule(lwt_t next);	
 
 void 
 __lwt_dispatch(lwt_t next, lwt_t curr) __attribute__ ((noinline));
@@ -123,13 +150,18 @@ extern void
 __lwt_trampoline_test();
 
 void 
-__lwt_start(lwt_fn_t fn, void *data);	
+__lwt_start();
 
+void 
+__lwt_addrq(lwt_t thd);
 
-queue *
-__run_queue();
+void
+__lwt_remrq(lwt_t thd);
 
-queue *
-__wait_queue();
+void
+__lwt_print_rq();
+
+void
+__lwt_print_wq();
 
 #endif

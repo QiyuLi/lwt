@@ -2,7 +2,7 @@ BIN=main
 OBJS=main.o lwt_tramp.o lwt.o lwt_chan.o ring_buffer.o queue.o
 CC=gcc
 #CFLAGS=-ggdb3 -I. -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
-CFLAGS=-O3 -ggdb3 -I. -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
+CFLAGS=-O3 -ggdb3 -I. -lpthread -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
 #DEFINES=
 
 all:	$(BIN)
