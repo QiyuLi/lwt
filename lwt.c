@@ -25,9 +25,16 @@ volatile unsigned long long startx, endx;
 
 /* Global Variables */
 
-__thread int initialized = 0;
 
-__thread lwt_tgrp_t tg;
+pthread_mutex_t k_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t k_cond = PTHREAD_COND_INITIALIZER;
+
+pthread_mutex_t kp_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t kp_cond = PTHREAD_COND_INITIALIZER;
+
+//thread variables
+
+__thread lwt_tgrp_t tg = NULL;
 
 
 /* lwt functions */
@@ -47,12 +54,8 @@ lwt_info(lwt_info_t t)
 lwt_t 
 lwt_current(void)
 {
-	if(tg)
-        	return tg->curr_thd;
-	else{
-		__lwt_initialize();	
-		return tg->curr_thd;
-	}
+	if(!tg) __lwt_initialize();	
+	return tg->curr_thd;
 }
 
 int 
@@ -74,8 +77,6 @@ lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag, void *c)
 	for(temp = 1; temp < MAX_THREAD_SIZE; temp++)
 		if(!tg->tcb[temp] || tg->tcb[temp]->state == LWT_INFO_NTHD_FINISHED)
 			break;
-	
-	//printf("lwt create temp = %d, data  = %x\n",temp, data);
 
 	if(!tg->tcb[temp]){
 		tg->tcb[temp] = tg->tcb_index + sizeof(lwt_tcb) * temp;
@@ -91,13 +92,14 @@ lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag, void *c)
 	tg->tcb[temp]->parent_thd   = lwt_current();
 	tg->tcb[temp]->group    = tg;
 
-	if(c)	
-		((lwt_chan_t)c)->rcv_thd = tg->tcb[temp];
-
-	tg->tcb[temp]->chan     = c;
+	if(c){	
+		lwt_chan_t chan = (lwt_chan_t)c;
+		chan->rcv_thd = tg->tcb[temp];
+		lwt_chan_ref(chan);
+		tg->tcb[temp]->chan     = c;
+	}
 
 	tg->thd_count++;
-
 	__lwt_addrq(tg->tcb[temp]);
 
 	return tg->tcb[temp];
@@ -105,15 +107,26 @@ lwt_create(lwt_fn_t fn, void *data, lwt_flags_t flag, void *c)
 
 int 
 lwt_yield(lwt_t lwt)
-{
-	//printf("lwt_yield %d %d \n",wait_queue->size, run_queue->size);
-
-	if(!initialized){
-		__lwt_initialize();
-	}
-
-	if(lwt == lwt_current())
+{	
+	lwt_t curr = lwt_current();
+	
+	if(lwt == curr)
 		return 0;
+
+	lwt_tgrp_t tg = curr->group;
+	ring_buffer *rb = curr->group->unblock_list;	
+
+	while(1){
+		while(!rb_empty(rb))
+			lwt_unblock(rb_get_sync(rb));
+		
+		if(tg->rq_head) break;
+
+		//printf("pid %d lwt_yield: kthread blocked \n", curr->group->pid);
+		
+		pthread_cond_wait(&k_cond,&k_mutex);
+		pthread_mutex_unlock(&k_mutex);
+	}
 
 	__lwt_schedule(lwt);
 
@@ -125,27 +138,16 @@ lwt_join(lwt_t lwt)
 {		
 	lwt_t curr = lwt_current();
 
-	if(!initialized){
-		__lwt_initialize();
-	}
-
 	if(!lwt || lwt->joinable == LWT_NOJOIN || lwt->parent_thd != curr)
 		return NULL;
 
 	if(lwt->state == LWT_INFO_NTHD_RUNNABLE || lwt->state == LWT_INFO_NTHD_NEW ){
-
 		lwt_block(curr);
-		
-		//printf("lwt_join %d %d \n",wait_queue->size, run_queue->size);
-
 		lwt_yield(LWT_NULL);
 	}
 
 	lwt->state = LWT_INFO_NTHD_FINISHED;
-
 	curr->group->thd_count--;
-
-	
 
         return lwt->retVal;
 }
@@ -155,23 +157,19 @@ lwt_die(void *val)
 {	
 	//printf("lwt_die: %d\n", val);
 
-	lwt_t curr = lwt_current();
-	
-	if(curr->joinable == LWT_JOIN){
-		
-		curr->state = LWT_INFO_NTHD_ZOMBIES;
+	lwt_t curr = lwt_current();	
+	__lwt_remrq(curr);
 
-		curr->retVal = val;	
-		
-		lwt_unblock(curr->parent_thd);
-			
-		lwt_yield(LWT_NULL);
+	if(curr->joinable == LWT_JOIN){		
+		curr->state = LWT_INFO_NTHD_ZOMBIES;
+		curr->retVal = val;			
+		lwt_unblock(curr->parent_thd);			
 	}else{
 		curr->state = LWT_INFO_NTHD_FINISHED;
-
 		curr->group->thd_count--;
 	}	
-	
+
+	lwt_yield(LWT_NULL);	
 }
 
 void 
@@ -181,11 +179,8 @@ lwt_block(lwt_t lwt)
 		return;
 
 	lwt->state = LWT_INFO_NTHD_BLOCKED;
-
 	__lwt_addwq(lwt);
-
 	__lwt_remrq(lwt);
-
 
 	//printf("lwt block %d \n",lwt->tid);
 }
@@ -193,52 +188,33 @@ lwt_block(lwt_t lwt)
 void 
 lwt_unblock(lwt_t lwt)
 {
-	if(lwt->state == LWT_INFO_NTHD_RUNNABLE)
+	if(lwt->state == LWT_INFO_NTHD_RUNNABLE || lwt->state == LWT_INFO_NTHD_NEW)
 		return;
 
 	lwt->state = LWT_INFO_NTHD_RUNNABLE;
-
 	__lwt_addrq(lwt);
-
 	__lwt_remwq(lwt);
-
 
 	//printf("lwt unblock %d \n",lwt->tid);
 }
 
-lwt_tgrp_t
-lwt_tgrp()
-{
-	lwt_tgrp_t tg = malloc(sizeof(lwt_thd_group));
-
-	tg->thd_count = 0;
-
-	tg->rq_head = tg->wq_head = NULL;
-
-	tg->tcb_index   = malloc(sizeof(lwt_tcb) * MAX_THREAD_SIZE);
-	tg->stack_index = malloc(DEFAULT_STACK_SIZE * MAX_THREAD_SIZE);	
-
-	memset(tg->tcb_index, 0, sizeof(tg->tcb_index));
-	memset(tg->stack_index, 0, sizeof(tg->stack_index));
-
-	tg->req_list = rb_init(10);
-
-	return tg;
-}
-
-struct multi_arg {
-	lwt_fn_t fn;
-	void* data;
-	void* chan;
-};
+//kernel thread functions
 
 void *
-__lwt_kthd_start(void *data)
+__lwt_kthd_start(struct kthd_arg *a)
 {
+	lwt_chan_t c = a->chan;
 
-	struct multi_arg *a = data;
+	if(c){
+		c->rcv_thd = lwt_current();
+		lwt_chan_ref(c);
+	}
+
+	//printf("pid %d _lwt_kthd_start %x %d %x\n",pthread_self(),a->fn,a->data,a->chan);
 
 	a->fn(a->data,a->chan);
+
+	free(a);
 
 	pthread_detach(pthread_self());
 }
@@ -251,63 +227,215 @@ lwt_kthd_create(lwt_fn_t fn, void *data, void *c)
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-	struct multi_arg a;
+	struct kthd_arg *a = malloc(sizeof(struct kthd_arg));
+	a->fn = fn;
+	a->data = data;
+	a->chan = c;
 
-	a.fn = fn;
-	a.data = data;
-	a.chan = c;
+	//printf("lwt_kthd_create %x %x %d %x \n",a, a->fn,a->data,a->chan);
 
-	int rc = pthread_create(&thd, &attr, __lwt_kthd_start, &a);
+	pthread_create(&thd, &attr, __lwt_kthd_start, a);
 
-	
-
-	//rc = pthread_join(thd, NULL);
-
-	return rc;
+	return thd;
 }
 
+int
+lwt_kthd_sndreq(lwt_tgrp_t tg, lwt_t lwt)
+{
+	ring_buffer *rb = tg->unblock_list;
+	
+	if(rb_full(rb))
+		return -1;
+
+	rb_add_sync(rb, lwt);
+	
+	//printf("pid %d lwt_kthd_sndreq %d\n",pthread_self(),lwt->tid);
+
+	pthread_cond_broadcast(&k_cond);	
+
+	//pthread_cond_signal(&k_cond);	
+
+	return 0;
+}
+
+//kernel pool functions
+
+void
+__kp_worker(kp_t pool, lwt_chan_t c)
+{
+	while(1){
+
+		__sync_fetch_and_add(&(pool->act_cnt),+1);
+	
+		//printf("pid %d __kp_worker, act_cnt %d\n",pthread_self(),pool->act_cnt);
+	
+		kp_req_t req = lwt_rcv(c);
+	
+		if((int)req == 0){
+			break;	
+		}
+
+		__sync_fetch_and_add(&(pool->act_cnt),-1);
+		req->fn(NULL,req->chan);
+	}
+
+	lwt_chan_deref(c);	
+	
+	printf("__kp_worker exit\n");
+
+	pthread_detach(pthread_self());
+}
+
+void
+__kp_master(kp_t pool, lwt_chan_t c)
+{
+	lwt_cgrp_t cg = lwt_cgrp();
+	lwt_chan_t chan;
+
+	int exit = 0;
+
+	while(1){
+		kp_req_t req = lwt_rcv(c);
+	
+		if((int)req == 0){
+	
+			while(pool->pthd_cnt)
+				__kp_rem_worker(pool,cg);
+			break;	
+		}
+
+		if(!pool->act_cnt && pool->pthd_cnt < pool->sz)
+			__kp_add_worker(pool,cg);
+		
+		while( pool->act_cnt > (pool->sz + 1) / 2 )
+			__kp_rem_worker(pool,cg);							
+		
+		chan = lwt_cgrp_wait(cg,LWT_CHAN_SND);
+		lwt_snd(chan,req);	
+	}	
+
+	lwt_chan_deref(c);		
+	free(pool);
+	
+	printf("__kp_master exit\n");
+
+	pthread_detach(pthread_self());
+}
+
+void
+__kp_add_worker(kp_t pool, lwt_cgrp_t cg)
+{
+	//printf("pid %d __kp_add_worker %d %d %d \n",pthread_self(), pool->act_cnt, pool->pthd_cnt, pool->sz);
+
+	lwt_chan_t c = lwt_chan(0);		
+	lwt_cgrp_add(cg, c, LWT_CHAN_SND);
+	lwt_kthd_create(__kp_worker, pool, c);
+
+	pool->pthd_cnt++;		
+}
+
+void
+__kp_rem_worker(kp_t pool, lwt_cgrp_t cg)
+{
+	//printf("pid %d __kp_rem_worker, %d %d \n",pthread_self(), pool->act_cnt, pool->sz);	
+
+	lwt_chan_t c = lwt_cgrp_wait(cg,LWT_CHAN_SND);			
+	lwt_chan_deref(c);		
+	lwt_cgrp_rem(cg, c, LWT_CHAN_SND);
+			
+	lwt_snd(c,0);
+
+	pool->pthd_cnt--;	
+	__sync_fetch_and_add(&(pool->act_cnt),-1);
+}
+
+kp_t 
+kp_create(int sz)
+{
+	kp_t pool = malloc(sizeof(kernel_pool));
+
+	pool->sz = sz;
+	pool->act_cnt = 0;
+	pool->exit = 0;
+	pool->pthd_cnt = 0;
+	pool->master_chan = lwt_chan(100);
+
+	lwt_kthd_create(__kp_master, pool, pool->master_chan);
+
+	return pool;
+}
+
+int
+kp_work(kp_t pool, lwt_fn_t work, void *c)
+{
+	kp_req_t req = malloc(sizeof(kp_request));
+	req->fn      = work;
+	req->chan    = c;
+	
+	return lwt_snd(pool->master_chan,req);
+}
+
+int
+kp_destroy(kp_t pool)
+{
+	return lwt_snd(pool->master_chan,0);
+}
 
 /* private lwt functions */
+
+lwt_tgrp_t
+__lwt_tgrp()
+{
+	lwt_tgrp_t tg = malloc(sizeof(lwt_thd_group));
+
+	tg->pid = pthread_self();	
+	tg->thd_count = 0;
+	tg->rq_head = NULL;
+	tg->wq_head = NULL;
+	tg->unblock_list = rb_init(100);
+
+	tg->tcb_index   = malloc(sizeof(lwt_tcb) * MAX_THREAD_SIZE);
+	tg->stack_index = malloc(DEFAULT_STACK_SIZE * MAX_THREAD_SIZE);	
+
+	memset(tg->tcb_index, 0, sizeof(tg->tcb_index));
+	memset(tg->stack_index, 0, sizeof(tg->stack_index));
+
+	return tg;
+}
 
 void
 __lwt_initialize()
 {
 	//printf("lwt initialize: add main %x\n",tcb[temp]->state);
 	
-	if(initialized)
-		return;
+	if(tg) return;
 
-	initialized = 1;
-
-	tg = lwt_tgrp();
+	tg = __lwt_tgrp();
 	
 	int temp = tg->thd_count;
-	tg->thd_count++;
 
 	tg->tcb[temp]         = tg->tcb_index;
 	tg->tcb[temp]->tid    = temp;
 	tg->tcb[temp]->state  = LWT_INFO_NTHD_RUNNABLE;
 	tg->tcb[temp]->group  = tg;
-
-	__lwt_addrq(tg->tcb[temp]);
-
 	tg->curr_thd = tg->tcb[temp];
+
+	tg->thd_count++;
+	__lwt_addrq(tg->tcb[temp]);
 }
 
 void 
 __lwt_schedule(lwt_t next)
 {	
 	lwt_t curr = lwt_current();	
+	
+	//printf("lwt schedule pid %d\n",curr->group->pid);
 
 	if(!next && curr->state == LWT_INFO_NTHD_RUNNABLE){
 		next = curr->rq_next;
 		curr->group->rq_head = next;
 		curr->group->curr_thd = next;
 
-		//printf("lwt schedule case 1, curr %d next %d \n",curr->tid,next->tid);
-		//__lwt_print_rq();
-		//__lwt_print_wq();
-		
 		if(next->state == LWT_INFO_NTHD_NEW){
 			next->state = LWT_INFO_NTHD_RUNNABLE;
 	    		__lwt_dispatch_new(next, curr);
@@ -316,10 +444,6 @@ __lwt_schedule(lwt_t next)
 			__lwt_dispatch(next, curr);
 		}	
 		return;
-	}
-
-	if(curr->state == LWT_INFO_NTHD_ZOMBIES || curr->state == LWT_INFO_NTHD_FINISHED){
-		__lwt_remrq(curr);
 	}
 
 	if(next){
@@ -342,7 +466,6 @@ __lwt_schedule(lwt_t next)
 	else{
 		__lwt_dispatch(next, curr);
 	}
-	
 }
 
 void 
@@ -382,14 +505,9 @@ void
 __lwt_start()
 {
 	lwt_t curr = lwt_current();
-
 	void * retVal = curr->fn(curr->data, curr->chan);
-
 	lwt_die(retVal);	
 }
-
-
-
 
 void 
 __lwt_addrq(lwt_t thd)
@@ -476,18 +594,18 @@ __lwt_remwq(lwt_t thd)
 void
 __lwt_print_rq()
 {
-	lwt_t curr = lwt_current();
+	lwt_t rq_head = lwt_current()->group->rq_head;
 
-	if(!curr){
+	if(!rq_head){
 		printf("run queue: empty  \n");
 		return;
 	}
 
 	lwt_t thd;
 
-	printf("run queue: %d ",curr->group->rq_head->tid);
+	printf("run queue: %d ",rq_head->tid);
 
-	for(thd = curr->group->rq_head->rq_next; thd != curr; thd = thd->rq_next)
+	for(thd = rq_head->rq_next; thd != rq_head; thd = thd->rq_next)
 		printf("%d ",thd->tid);
 
 	printf("\n");	

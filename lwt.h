@@ -3,9 +3,10 @@
 
 #include <ring_buffer.h>
 
-
 #define MAX_THREAD_SIZE    512 
 #define DEFAULT_STACK_SIZE 0x2000 //
+
+#define MAX_KP_SIZE 64
 
 
 /* Thread Status */
@@ -35,6 +36,10 @@ typedef struct lwt_tcb *lwt_t;
 
 typedef struct lwt_thd_group *lwt_tgrp_t;
 
+typedef struct kernel_pool *kp_t;
+
+typedef struct kp_request *kp_req_t;
+
 struct lwt_channel;
 
 struct lwt_tcb {
@@ -63,8 +68,9 @@ struct lwt_tcb {
 
 } lwt_tcb; 
 
-
 struct lwt_thd_group {
+
+	pthread_t pid;
 
 	int thd_count;
 
@@ -77,11 +83,37 @@ struct lwt_thd_group {
 	lwt_t wq_head;
 	lwt_t curr_thd;
 
-	ring_buffer *req_list;
+	ring_buffer *unblock_list;
 
 } lwt_thd_group;
 
+struct kthd_arg {
+	lwt_fn_t fn;
+	void* data;
+	void* chan;
+} kthd_arg;
 
+
+struct kernel_pool {
+
+	lwt_t master;
+
+	void *master_chan;
+	void *cg;
+	int sz;
+	int pthd_cnt;
+	int act_cnt;
+
+	ring_buffer *req_list;
+
+	int exit;
+
+} kernel_pool;
+
+struct kp_request {
+	lwt_fn_t fn;
+	void *chan;
+} kp_request;
 
 
 /* lwt functions */
@@ -113,26 +145,28 @@ void
 lwt_unblock(lwt_t lwt);
 
 
-// lwt thd group functions
+// lwt kthd functions
+
 
 int 
 lwt_kthd_create(lwt_fn_t fn, void *data, void *c);
 
+int
+lwt_kthd_sndreq(lwt_tgrp_t tg, lwt_t lwt);
 
-lwt_tgrp_t
-lwt_tgrp();
+kp_t 
+kp_create(int sz);
 
 int
-lwt_tgrp_add(lwt_tgrp_t tg, lwt_t lwt);
+kp_work(kp_t pool, lwt_fn_t work, void *c);
 
 int
-lwt_tgrp_rem(lwt_tgrp_t tg, lwt_t lwt);
-
-lwt_tgrp_t
-current_tgrp();
-
+kp_destroy(kp_t pool);
 
 /* private lwt functions */
+
+lwt_tgrp_t
+__lwt_tgrp();
 
 void 
 __lwt_schedule(lwt_t next);	
